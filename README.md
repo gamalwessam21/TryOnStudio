@@ -69,6 +69,9 @@ Open `http://localhost:5173` in your browser. Note that the backend currently al
 4. `vercel.json` is already included to rewrite client-side SPA routes (`/browse`, `/size-guide`, `/how-it-works`) to `/index.html`.
 5. **Important Backend CORS Action Required After Deployment**:
    - Currently, the backend (`https://clothesai3d.runasp.net`) allows `http://localhost:5173`.
-   - Once Vercel assigns your production HTTPS domain (e.g., `https://try-on-studio.vercel.app`), share that exact origin (scheme + domain, no trailing slash) with the backend owner so it is added to the backend's allowed CORS origins.
+   - Production URLs deployed on Vercel:
+     - Primary Production Origin: `https://try-on-studio-beta.vercel.app`
+     - Secondary Production Alias: `https://try-on-studio-gamal15.vercel.app`
+   - Share the exact origin **`https://try-on-studio-beta.vercel.app`** (and optionally `https://try-on-studio-gamal15.vercel.app`, with no trailing slash) with the backend owner so it is added to the backend's allowed CORS origins.
    - HTTPS is automatically provided by Vercel and is required by browsers for `getUserMedia` camera access.
 
