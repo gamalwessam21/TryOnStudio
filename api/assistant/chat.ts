@@ -464,7 +464,7 @@ export async function POST(request: Request): Promise<Response> {
             contents: geminiContents,
             generationConfig: {
               temperature: 0.65,
-              maxOutputTokens: 900,
+              maxOutputTokens: 1400,
             },
           }),
           signal: controller.signal,
@@ -492,15 +492,22 @@ export async function POST(request: Request): Promise<Response> {
 
       const payload = (await geminiRes.json()) as {
         candidates?: Array<{
-          content?: { parts?: Array<{ text?: string }> };
+          content?: {
+            parts?: Array<{
+              text?: string;
+              thought?: boolean;
+            }>;
+          };
         }>;
       };
 
-      const rawReply =
-        payload.candidates?.[0]?.content?.parts
-          ?.map((p) => p.text ?? '')
-          .join('')
-          .trim() ?? '';
+      const candidateParts = payload.candidates?.[0]?.content?.parts ?? [];
+      const nonThoughtParts = candidateParts.filter((p) => !p.thought);
+      const partsToUse = nonThoughtParts.length > 0 ? nonThoughtParts : candidateParts;
+      const rawReply = partsToUse
+        .map((p) => p.text ?? '')
+        .join('')
+        .trim();
 
       if (!rawReply) {
         continue;
