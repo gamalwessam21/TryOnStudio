@@ -2,16 +2,22 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Camera,
+  Gift,
+  Globe,
   HelpCircle,
   Menu,
   RefreshCw,
   Ruler,
   Search,
   Shirt,
+  ShoppingBag,
   Sparkles,
   X,
 } from 'lucide-react';
 import { useStudio } from '../app/StudioContext';
+import { useCommerce } from '../app/CommerceContext';
+import { useLanguage } from '../i18n/LanguageContext';
+import { AssistantFloatingDrawer } from '../features/assistant/AssistantFloatingDrawer';
 
 export function Layout() {
   const {
@@ -21,6 +27,8 @@ export function Layout() {
     healthState,
     refreshHealth,
   } = useStudio();
+  const { checkoutDraft } = useCommerce();
+  const { language, setLanguage, t } = useLanguage();
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
@@ -82,9 +90,9 @@ export function Layout() {
               </svg>
             </div>
             <div>
-              <div className="sidebar-brand-title">Try On Studio</div>
+              <div className="sidebar-brand-title">{t('brandTitle')}</div>
               <div className="sidebar-brand-subtitle">
-                See it. Wear it. Find your size.
+                {t('brandSubtitle')}
               </div>
             </div>
           </div>
@@ -98,7 +106,7 @@ export function Layout() {
               }
             >
               <Camera size={18} aria-hidden="true" />
-              <span>Try On Studio</span>
+              <span>{t('navStudio')}</span>
             </NavLink>
 
             <NavLink
@@ -108,7 +116,7 @@ export function Layout() {
               }
             >
               <Shirt size={18} aria-hidden="true" />
-              <span>Browse Clothing</span>
+              <span>{t('navBrowse')}</span>
             </NavLink>
 
             <NavLink
@@ -118,7 +126,42 @@ export function Layout() {
               }
             >
               <Ruler size={18} aria-hidden="true" />
-              <span>Find My Size</span>
+              <span>{t('navSizeGuide')}</span>
+            </NavLink>
+
+            <NavLink
+              to="/assistant"
+              className={({ isActive }) =>
+                `sidebar-nav-link ${isActive ? 'active' : ''}`
+              }
+            >
+              <Sparkles size={18} aria-hidden="true" />
+              <span>{t('navAssistant')}</span>
+            </NavLink>
+
+            <NavLink
+              to="/loyalty"
+              className={({ isActive }) =>
+                `sidebar-nav-link ${isActive ? 'active' : ''}`
+              }
+            >
+              <Gift size={18} aria-hidden="true" />
+              <span>{t('navLoyalty')}</span>
+            </NavLink>
+
+            <NavLink
+              to="/checkout"
+              className={({ isActive }) =>
+                `sidebar-nav-link ${isActive ? 'active' : ''}`
+              }
+            >
+              <ShoppingBag size={18} aria-hidden="true" />
+              <span>{t('navCheckout')}</span>
+              {checkoutDraft && (
+                <span className="nav-badge" aria-label="1 item in checkout">
+                  1
+                </span>
+              )}
             </NavLink>
 
             <NavLink
@@ -128,7 +171,7 @@ export function Layout() {
               }
             >
               <HelpCircle size={18} aria-hidden="true" />
-              <span>How It Works</span>
+              <span>{t('navHowItWorks')}</span>
             </NavLink>
           </nav>
         </div>
@@ -189,6 +232,25 @@ export function Layout() {
           <div className="header-right">
             <button
               type="button"
+              className="lang-switcher-btn"
+              onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
+              aria-label={
+                language === 'en'
+                  ? 'Switch language to Arabic'
+                  : 'التحويل إلى اللغة الإنجليزية'
+              }
+              title={
+                language === 'en'
+                  ? 'Switch to العربية'
+                  : 'Switch to English'
+              }
+            >
+              <Globe size={15} aria-hidden="true" />
+              <span>{language === 'en' ? 'العربية' : 'English'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => void refreshHealth()}
               className={`api-status-pill ${
                 healthState === 'healthy'
@@ -207,10 +269,10 @@ export function Layout() {
               <span className="status-dot" aria-hidden="true" />
               <span className="api-status-label-text">
                 {healthState === 'checking'
-                  ? 'Checking API...'
+                  ? t('checkingApi')
                   : healthState === 'healthy'
-                  ? 'Catalog API Online'
-                  : 'API Unreachable'}
+                  ? t('apiOnline')
+                  : t('apiOffline')}
               </span>
               <RefreshCw
                 size={13}
@@ -225,6 +287,8 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <AssistantFloatingDrawer />
     </div>
   );
 }

@@ -5,12 +5,16 @@ import {
   RefreshCw,
   Ruler,
   Shirt,
+  ShoppingBag,
   Sparkles,
 } from 'lucide-react';
 import { useStudio } from '../StudioContext';
+import { useCommerce } from '../CommerceContext';
+import { useLanguage } from '../../i18n/LanguageContext';
 import { GarmentImage } from '../../components/GarmentImage';
 import { ClothingRack360 } from '../../features/catalog/ClothingRack360';
-import { formatPrice } from '../../utils/garmentHelpers';
+import { formatDualPrice } from '../../utils/commerceHelpers';
+import { fashionApi } from '../../services/fashionApi';
 
 export function BrowsePage() {
   const {
@@ -29,6 +33,8 @@ export function BrowsePage() {
     reloadRack,
     selectItem,
   } = useStudio();
+  const { usdToEgpRate, prepareCheckoutFromItem } = useCommerce();
+  const { language, t } = useLanguage();
 
   const navigate = useNavigate();
 
@@ -40,6 +46,26 @@ export function BrowsePage() {
   function openInSizeFinder(id: number) {
     selectItem(id);
     navigate(`/size-guide?item=${id}`);
+  }
+
+  async function handleQuickBuy(id: number) {
+    selectItem(id);
+    try {
+      const details = await fashionApi.getFashionItemDetails(id);
+      const defaultSize =
+        details.availableSizes && details.availableSizes.length === 1
+          ? details.availableSizes[0]
+          : null;
+      prepareCheckoutFromItem({
+        item: details,
+        variant: details.variants?.[0] ?? null,
+        size: defaultSize,
+        quantity: 1,
+      });
+      navigate('/checkout');
+    } catch {
+      navigate(`/?item=${id}`);
+    }
   }
 
   return (
@@ -239,34 +265,44 @@ export function BrowsePage() {
 
                 <div
                   style={{
-                    fontSize: '1.02rem',
-                    fontWeight: 800,
+                    fontSize: '0.94rem',
+                    fontWeight: 700,
                     marginTop: 'auto',
                     paddingTop: 4,
+                    color: 'var(--accent)',
                   }}
                 >
-                  {formatPrice(item.price)}
+                  {formatDualPrice(item.price, usdToEgpRate, language)}
                 </div>
 
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="btn btn-sm btn-primary"
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, minWidth: 105 }}
                     onClick={() => openInStudio(item.id)}
                   >
                     <Sparkles size={14} aria-hidden="true" />
-                    <span>Studio Try-On</span>
+                    <span>{t('tryOn')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-accent"
+                    style={{ flex: 1, minWidth: 95 }}
+                    onClick={() => void handleQuickBuy(item.id)}
+                    aria-label={`Buy ${item.name}`}
+                  >
+                    <ShoppingBag size={14} aria-hidden="true" />
+                    <span>{t('buyNow')}</span>
                   </button>
                   <button
                     type="button"
                     className="btn btn-sm btn-secondary"
                     onClick={() => openInSizeFinder(item.id)}
                     aria-label={`Check size for ${item.name}`}
-                    title="Find or check size"
+                    title={t('sizeGuide')}
                   >
                     <Ruler size={14} aria-hidden="true" />
-                    <span>Size</span>
                   </button>
                 </div>
               </article>

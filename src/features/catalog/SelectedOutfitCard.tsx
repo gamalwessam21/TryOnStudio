@@ -1,7 +1,10 @@
-import { AlertCircle, Check, RefreshCw, Shirt } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertCircle, Check, RefreshCw, Shirt, ShoppingBag } from 'lucide-react';
 import { GarmentImage } from '../../components/GarmentImage';
 import type { FashionItemDetails, FashionVariant } from '../../types/api';
-import { formatPrice } from '../../utils/garmentHelpers';
+import { useCommerce } from '../../app/CommerceContext';
+import { useLanguage } from '../../i18n/LanguageContext';
+import { formatDualPrice } from '../../utils/commerceHelpers';
 
 interface SelectedOutfitCardProps {
   item: FashionItemDetails | null;
@@ -28,10 +31,36 @@ export function SelectedOutfitCard({
   onChooseOutfit,
   onRetry,
 }: SelectedOutfitCardProps) {
+  const { language, t } = useLanguage();
+  const {
+    usdToEgpRate,
+    selectedPurchaseSize,
+    setSelectedPurchaseSize,
+    prepareCheckoutFromItem,
+  } = useCommerce();
+  const navigate = useNavigate();
+
   const catalogSizes =
     supportedSizes.length > 0
       ? supportedSizes
       : ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
+  const handleProceedToCheckout = () => {
+    if (!item) return;
+    const defaultSize =
+      selectedPurchaseSize ??
+      (item.availableSizes && item.availableSizes.length === 1
+        ? item.availableSizes[0]
+        : null);
+
+    prepareCheckoutFromItem({
+      item,
+      variant,
+      size: defaultSize,
+      quantity: 1,
+    });
+    navigate('/checkout');
+  };
 
   return (
     <section
@@ -116,13 +145,13 @@ export function SelectedOutfitCard({
                 </div>
                 <div
                   style={{
-                    fontSize: '0.9rem',
+                    fontSize: '0.88rem',
                     fontWeight: 700,
-                    color: 'var(--text-secondary)',
+                    color: 'var(--blue-600)',
                     marginTop: 2,
                   }}
                 >
-                  {formatPrice(item.price)}
+                  {formatDualPrice(item.price, usdToEgpRate, language)}
                 </div>
               </div>
 
@@ -196,7 +225,7 @@ export function SelectedOutfitCard({
             </div>
           </div>
 
-          {/* Offered / Manufactured Sizes */}
+          {/* Offered / Manufactured Sizes with click-to-pick for checkout */}
           <div>
             <div
               style={{
@@ -204,26 +233,40 @@ export function SelectedOutfitCard({
                 fontWeight: 600,
                 color: 'var(--text-secondary)',
                 marginBottom: 6,
+                display: 'flex',
+                justifyContent: 'space-between',
               }}
             >
-              Manufactured sizes:
+              <span>Manufactured sizes:</span>
+              {selectedPurchaseSize && (
+                <span style={{ color: 'var(--blue-600)', fontWeight: 700 }}>
+                  Selected: {selectedPurchaseSize}
+                </span>
+              )}
             </div>
             {item.availableSizes.length > 0 ? (
               <div className="sizes-pill-row">
                 {catalogSizes.map((sz) => {
                   const offered = item.availableSizes.includes(sz);
+                  const isSelected = selectedPurchaseSize === sz;
                   return (
-                    <span
+                    <button
                       key={sz}
-                      className={`size-chip ${offered ? '' : 'unoffered'}`}
+                      type="button"
+                      disabled={!offered}
+                      className={`size-chip ${offered ? '' : 'unoffered'} ${
+                        isSelected ? 'active' : ''
+                      }`}
+                      onClick={() => offered && setSelectedPurchaseSize(sz)}
                       title={
                         offered
-                          ? `Manufactured in size ${sz}`
+                          ? `Select size ${sz}`
                           : `Not manufactured in size ${sz}`
                       }
+                      style={{ cursor: offered ? 'pointer' : 'not-allowed' }}
                     >
                       {sz}
-                    </span>
+                    </button>
                   );
                 })}
               </div>
@@ -240,26 +283,38 @@ export function SelectedOutfitCard({
             )}
           </div>
 
-          <button
-            type="button"
-            className={`btn ${
-              outfitConfirmed && !tryOnActive ? 'btn-secondary' : 'btn-navy'
-            } btn-block`}
-            onClick={onChooseOutfit}
-            style={{ marginTop: 'auto' }}
-          >
-            <Check size={17} aria-hidden="true" />
-            <span>
-              {tryOnActive
-                ? 'Choose This Outfit (Close Try-On)'
-                : outfitConfirmed
-                ? 'Outfit Selected for Size Scan'
-                : 'Choose This Outfit'}
-            </span>
-          </button>
+          {/* Action Row: Choose Outfit + Buy Now */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={`btn ${
+                outfitConfirmed && !tryOnActive ? 'btn-secondary' : 'btn-navy'
+              }`}
+              onClick={onChooseOutfit}
+              style={{ flex: 1, minWidth: 150 }}
+            >
+              <Check size={16} aria-hidden="true" />
+              <span>
+                {tryOnActive
+                  ? 'Close Try-On'
+                  : outfitConfirmed
+                  ? 'Outfit Confirmed'
+                  : 'Choose Outfit'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleProceedToCheckout}
+              style={{ flex: 1.1, minWidth: 160 }}
+            >
+              <ShoppingBag size={16} aria-hidden="true" />
+              <span>{t('proceedToCheckout')}</span>
+            </button>
+          </div>
         </>
       )}
     </section>
   );
 }
-

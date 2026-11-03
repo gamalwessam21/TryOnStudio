@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   Check,
@@ -6,6 +7,7 @@ import {
   Loader2,
   RefreshCw,
   Shirt,
+  ShoppingBag,
   Sparkles,
 } from 'lucide-react';
 import { GarmentImage } from '../../components/GarmentImage';
@@ -16,6 +18,9 @@ import type {
   FashionVariant,
 } from '../../types/api';
 import { formatPrice } from '../../utils/garmentHelpers';
+import { formatDualPrice } from '../../utils/commerceHelpers';
+import { useCommerce } from '../../app/CommerceContext';
+import { useLanguage } from '../../i18n/LanguageContext';
 import type { TryOnStatus } from '../tryon/useDecartTryOn';
 
 type SelectorTab = 'garments' | 'colors' | 'details';
@@ -102,6 +107,26 @@ export function GarmentSelectorPanel({
   onChooseOutfit,
 }: GarmentSelectorPanelProps) {
   const [activeTab, setActiveTab] = useState<SelectorTab>('garments');
+  const { language, t } = useLanguage();
+  const { usdToEgpRate, prepareCheckoutFromItem, selectedPurchaseSize } = useCommerce();
+  const navigate = useNavigate();
+
+  const handleCheckoutCurrent = () => {
+    if (!selectedItemDetails) return;
+    const defaultSize =
+      selectedPurchaseSize ??
+      (selectedItemDetails.availableSizes && selectedItemDetails.availableSizes.length === 1
+        ? selectedItemDetails.availableSizes[0]
+        : null);
+
+    prepareCheckoutFromItem({
+      item: selectedItemDetails,
+      variant: selectedVariant,
+      size: defaultSize,
+      quantity: 1,
+    });
+    navigate('/checkout');
+  };
 
   const isTryOnActive =
     (tryOnStatus === 'connected' || tryOnStatus === 'switching_garment') &&
@@ -434,11 +459,11 @@ export function GarmentSelectorPanel({
                   style={{
                     fontSize: '1rem',
                     fontWeight: 700,
-                    color: 'var(--text-primary)',
+                    color: 'var(--blue-600)',
                     marginTop: 4,
                   }}
                 >
-                  {formatPrice(selectedItemDetails.price)}
+                  {formatDualPrice(selectedItemDetails.price, usdToEgpRate, language)}
                 </div>
               </div>
 
@@ -452,6 +477,16 @@ export function GarmentSelectorPanel({
                 {selectedItemDetails.description ||
                   'No product description provided by the catalog.'}
               </p>
+
+              <button
+                type="button"
+                className="btn btn-secondary btn-block"
+                onClick={handleCheckoutCurrent}
+                style={{ marginTop: 4 }}
+              >
+                <ShoppingBag size={15} aria-hidden="true" />
+                <span>{t('proceedToCheckout')}</span>
+              </button>
 
               <div
                 style={{

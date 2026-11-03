@@ -11,8 +11,9 @@ coverage/
 *.local
 *.tsbuildinfo
 
-# Environment Variables (keep .env.example tracked)
+# Environment Variables (ignore all .env* secrets; keep .env.example tracked)
 .env
+.env.*
 .env.local
 .env.*.local
 !.env.example
@@ -41,4 +42,3 @@ Desktop.ini
 
 # Vercel local cache
 .vercel/
-
