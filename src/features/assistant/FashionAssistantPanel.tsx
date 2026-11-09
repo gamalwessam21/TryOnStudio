@@ -448,11 +448,11 @@ export function FashionAssistantPanel({
                               <div className="assistant-rec-cat">
                                 {rec.categoryName}
                               </div>
-                              <div className="assistant-rec-name">{rec.name}</div>
+                              <div className="assistant-rec-name"><bdi>{rec.name}</bdi></div>
                               <div className="assistant-rec-price">
-                                {formatEgp(rec.priceEgp, language)}{' '}
+                                <bdi dir="ltr">{formatEgp(rec.priceEgp, language)}</bdi>{' '}
                                 <span className="assistant-rec-usd">
-                                  (${rec.priceUsd.toFixed(2)})
+                                  <bdi dir="ltr">(${rec.priceUsd.toFixed(2)})</bdi>
                                 </span>
                               </div>
                               <div className="assistant-rec-actions">

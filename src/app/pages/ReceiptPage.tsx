@@ -260,7 +260,7 @@ export function ReceiptPage() {
           <div className="receipt-meta-cell">
             <span className="meta-label">{language === 'ar' ? 'رقم الطلب:' : 'Order Number:'}</span>
             <div className="meta-value-copy">
-              <strong>{order.orderNumber}</strong>
+              <strong><bdi>{order.orderNumber}</bdi></strong>
               <button
                 type="button"
                 className="receipt-copy-btn print-hide"
@@ -342,7 +342,7 @@ export function ReceiptPage() {
                         </div>
                       )}
                       <div>
-                        <div className="receipt-item-name">{item.productName}</div>
+                        <div className="receipt-item-name"><bdi>{item.productName}</bdi></div>
                         {item.categoryName && (
                           <div className="receipt-item-sub">{item.categoryName}</div>
                         )}
@@ -351,11 +351,11 @@ export function ReceiptPage() {
                   </td>
                   <td>{item.colorName || '—'}</td>
                   <td>
-                    <span className="receipt-size-pill">{item.size || 'One Size'}</span>
+                    <span className="receipt-size-pill"><bdi>{item.size || (language === 'ar' ? 'مقاس موحد' : 'One Size')}</bdi></span>
                   </td>
-                  <td className="num">{item.quantity}</td>
-                  <td className="num">{formatEgp(item.unitPriceEgp, language)}</td>
-                  <td className="num bold">{formatEgp(item.lineTotalEgp, language)}</td>
+                  <td className="num"><bdi dir="ltr">{item.quantity}</bdi></td>
+                  <td className="num"><bdi dir="ltr">{formatEgp(item.unitPriceEgp, language)}</bdi></td>
+                  <td className="num bold"><bdi dir="ltr">{formatEgp(item.lineTotalEgp, language)}</bdi></td>
                 </tr>
               ))}
             </tbody>

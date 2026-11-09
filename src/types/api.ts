@@ -41,6 +41,7 @@ export interface FashionItemDetails {
   price: number;
   categoryId: number;
   categoryName: string;
+  thumbnailUrl?: string | null;
   variants: FashionVariant[];
   availableSizes: string[];
 }

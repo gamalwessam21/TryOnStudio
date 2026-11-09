@@ -45,6 +45,12 @@ export function SelectedOutfitCard({
       ? supportedSizes
       : ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
+  const activeImageSrc =
+    variant?.imageUrl ||
+    item?.thumbnailUrl ||
+    item?.variants?.[0]?.imageUrl ||
+    null;
+
   const handleProceedToCheckout = () => {
     if (!item) return;
     const defaultSize =
@@ -65,12 +71,12 @@ export function SelectedOutfitCard({
   return (
     <section
       className="card bottom-card"
-      aria-label="Selected garment and variant details"
+      aria-label={t('selectedOutfitTitle')}
     >
       <div className="bottom-card-header">
         <h2 className="bottom-card-title">
           <Shirt size={19} color="var(--blue-600)" aria-hidden="true" />
-          <span>Selected Outfit</span>
+          <span>{t('selectedOutfitTitle')}</span>
         </h2>
 
         {outfitConfirmed && (
@@ -85,7 +91,7 @@ export function SelectedOutfitCard({
               borderRadius: '999px',
             }}
           >
-            Outfit Chosen
+            {t('outfitChosen')}
           </span>
         )}
       </div>
@@ -100,7 +106,7 @@ export function SelectedOutfitCard({
             onClick={onRetry}
           >
             <RefreshCw size={13} />
-            <span>Retry</span>
+            <span>{t('retryBtn')}</span>
           </button>
         </div>
       ) : loading && !item ? (
@@ -114,21 +120,21 @@ export function SelectedOutfitCard({
         </div>
       ) : !item ? (
         <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>
-          Choose a garment from the catalog above to inspect its colors and
-          manufactured sizes.
+          {t('noOutfitSelected')}
         </p>
       ) : (
         <>
           <div className="selected-outfit-body">
             <div className="selected-outfit-thumb">
               <GarmentImage
-                src={variant?.imageUrl}
+                src={activeImageSrc}
                 alt={`${item.name}${
                   variant?.colorName ? ` — ${variant.colorName}` : ''
                 }`}
                 categoryName={item.categoryName}
                 colorHex={variant?.colorHex}
                 aspectRatio="4/5"
+                priority={true}
               />
             </div>
 
@@ -141,7 +147,7 @@ export function SelectedOutfitCard({
                     color: 'var(--text-primary)',
                   }}
                 >
-                  {item.name}
+                  <bdi>{item.name}</bdi>
                 </div>
                 <div
                   style={{
@@ -151,7 +157,7 @@ export function SelectedOutfitCard({
                     marginTop: 2,
                   }}
                 >
-                  {formatDualPrice(item.price, usdToEgpRate, language)}
+                  <bdi dir="ltr">{formatDualPrice(item.price, usdToEgpRate, language)}</bdi>
                 </div>
               </div>
 
@@ -192,7 +198,7 @@ export function SelectedOutfitCard({
                       clip: 'rect(0,0,0,0)',
                     }}
                   >
-                    Selected color variant
+                    {t('colorVariantLabel')}
                   </label>
                   <select
                     id="studio-variant-select"
@@ -237,10 +243,10 @@ export function SelectedOutfitCard({
                 justifyContent: 'space-between',
               }}
             >
-              <span>Manufactured sizes:</span>
+              <span>{t('manufacturedSizesLabel')}:</span>
               {selectedPurchaseSize && (
                 <span style={{ color: 'var(--blue-600)', fontWeight: 700 }}>
-                  Selected: {selectedPurchaseSize}
+                  <bdi>{selectedPurchaseSize}</bdi>
                 </span>
               )}
             </div>
@@ -260,12 +266,12 @@ export function SelectedOutfitCard({
                       onClick={() => offered && setSelectedPurchaseSize(sz)}
                       title={
                         offered
-                          ? `Select size ${sz}`
+                          ? `Size ${sz}`
                           : `Not manufactured in size ${sz}`
                       }
                       style={{ cursor: offered ? 'pointer' : 'not-allowed' }}
                     >
-                      {sz}
+                      <bdi>{sz}</bdi>
                     </button>
                   );
                 })}
@@ -278,7 +284,7 @@ export function SelectedOutfitCard({
                   fontStyle: 'italic',
                 }}
               >
-                Sizes aren&apos;t available for this item.
+                {t('notInSelected')}
               </div>
             )}
           </div>
@@ -296,10 +302,10 @@ export function SelectedOutfitCard({
               <Check size={16} aria-hidden="true" />
               <span>
                 {tryOnActive
-                  ? 'Close Try-On'
+                  ? t('closeTryOn')
                   : outfitConfirmed
-                  ? 'Outfit Confirmed'
-                  : 'Choose Outfit'}
+                  ? t('outfitConfirmed')
+                  : t('chooseOutfit')}
               </span>
             </button>
 

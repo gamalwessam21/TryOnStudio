@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Rotate3d, Sparkles } from 'lucide-react';
 import type { RackItem } from '../../types/api';
 import { formatPrice } from '../../utils/garmentHelpers';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface RackPieceCardProps {
   piece: RackItem;
@@ -9,6 +10,7 @@ interface RackPieceCardProps {
 }
 
 function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
+  const { t } = useLanguage();
   const frames = piece.frames ?? [];
   // Frames are ordered: [0] = back, [last] = front facing viewer
   const initialIndex = frames.length > 0 ? frames.length - 1 : 0;
@@ -51,14 +53,12 @@ function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        title="Drag left or right to rotate 360°"
+        title={t('dragToRotate')}
       >
         {currentSrc && !imgFailed ? (
           <img
             src={currentSrc}
-            alt={`${piece.name} — rotation angle ${frameIndex + 1} of ${
-              frames.length
-            }`}
+            alt={`${piece.name} — 360`}
             draggable={false}
             onError={() => setImgFailed(true)}
             style={{
@@ -79,7 +79,7 @@ function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
               fontSize: '0.8rem',
             }}
           >
-            360° preview unavailable
+            360°
           </div>
         )}
 
@@ -88,7 +88,7 @@ function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
             style={{
               position: 'absolute',
               top: 8,
-              right: 8,
+              insetInlineEnd: 8,
               background: 'rgba(15, 23, 42, 0.72)',
               color: '#ffffff',
               fontSize: '0.7rem',
@@ -101,7 +101,7 @@ function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
             }}
           >
             <Rotate3d size={12} aria-hidden="true" />
-            <span>Drag 360°</span>
+            <span>{t('dragToRotate')}</span>
           </span>
         )}
       </div>
@@ -126,7 +126,9 @@ function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
           gap: 8,
         }}
       >
-        <h3 style={{ fontSize: '0.9rem', fontWeight: 700 }}>{piece.name}</h3>
+        <h3 style={{ fontSize: '0.9rem', fontWeight: 700 }}>
+          <bdi>{piece.name}</bdi>
+        </h3>
         <span
           style={{
             fontSize: '0.86rem',
@@ -134,7 +136,7 @@ function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
             color: 'var(--text-secondary)',
           }}
         >
-          {formatPrice(piece.price)}
+          <bdi dir="ltr">{formatPrice(piece.price)}</bdi>
         </span>
       </div>
 
@@ -147,7 +149,7 @@ function RackPieceCard({ piece, onTryOn }: RackPieceCardProps) {
         }}
       >
         <Sparkles size={14} aria-hidden="true" />
-        <span>Try It On</span>
+        <span>{t('selectFromRack')}</span>
       </button>
     </article>
   );
@@ -168,6 +170,8 @@ export function ClothingRack360({
   onRetry,
   onOpenInStudio,
 }: ClothingRack360Props) {
+  const { t } = useLanguage();
+
   if (!loading && !error && rackItems.length === 0) {
     return null;
   }
@@ -175,7 +179,7 @@ export function ClothingRack360({
   return (
     <section
       className="card rack-section"
-      aria-label="Interactive 360 degree clothing rack"
+      aria-label={t('rackTitle')}
     >
       <div
         style={{
@@ -188,11 +192,10 @@ export function ClothingRack360({
       >
         <div>
           <h2 style={{ fontSize: '1.14rem', fontWeight: 700 }}>
-            360° Interactive Clothing Rack
+            {t('rackTitle')}
           </h2>
           <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-            Drag horizontally or use the slider to inspect garments from every
-            angle before opening in Try On Studio.
+            {t('rackSubtitle')}
           </p>
         </div>
       </div>
@@ -205,7 +208,7 @@ export function ClothingRack360({
             className="btn btn-sm btn-secondary"
             onClick={onRetry}
           >
-            Retry
+            {t('retryBtn')}
           </button>
         </div>
       ) : loading ? (
@@ -228,4 +231,3 @@ export function ClothingRack360({
     </section>
   );
 }
-

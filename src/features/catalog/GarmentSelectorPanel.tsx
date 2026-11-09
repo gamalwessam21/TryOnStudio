@@ -141,7 +141,7 @@ export function GarmentSelectorPanel({
   return (
     <section
       className="card selector-panel"
-      aria-label="Clothing catalog and variant selector"
+      aria-label={t('selectorTitle')}
     >
       {/* Panel Tabs */}
       <div className="selector-tabs" role="tablist" aria-label="Garment selector tabs">
@@ -152,7 +152,7 @@ export function GarmentSelectorPanel({
           className={`selector-tab-btn ${activeTab === 'garments' ? 'active' : ''}`}
           onClick={() => setActiveTab('garments')}
         >
-          Garments
+          {t('tabGarments')}
         </button>
         <button
           type="button"
@@ -161,7 +161,7 @@ export function GarmentSelectorPanel({
           className={`selector-tab-btn ${activeTab === 'colors' ? 'active' : ''}`}
           onClick={() => setActiveTab('colors')}
         >
-          Colors ({variants.length})
+          {t('tabColors')} ({variants.length})
         </button>
         <button
           type="button"
@@ -170,7 +170,7 @@ export function GarmentSelectorPanel({
           className={`selector-tab-btn ${activeTab === 'details' ? 'active' : ''}`}
           onClick={() => setActiveTab('details')}
         >
-          Details
+          {t('tabDetails')}
         </button>
       </div>
 
@@ -187,7 +187,7 @@ export function GarmentSelectorPanel({
                 className="btn btn-sm btn-secondary"
                 onClick={onRetryCategories}
               >
-                Retry
+                {t('retryBtn')}
               </button>
             </div>
           ) : (
@@ -204,7 +204,7 @@ export function GarmentSelectorPanel({
                 onClick={() => onSelectCategory(null)}
               >
                 <Layers size={17} aria-hidden="true" />
-                <span>All</span>
+                <span>{t('allCategories')}</span>
               </button>
 
               {categoriesLoading
@@ -227,7 +227,7 @@ export function GarmentSelectorPanel({
                       <CategoryGlyph name={cat.name} />
                       <span>{cat.name}</span>
                       <span className="category-pill-count">
-                        {cat.itemCount} items
+                        <bdi>{cat.itemCount}</bdi>
                       </span>
                     </button>
                   ))}
@@ -240,7 +240,6 @@ export function GarmentSelectorPanel({
               <div className="banner banner-error">
                 <AlertCircle size={18} style={{ flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600 }}>Catalog Unavailable</div>
                   <div>{itemsError}</div>
                 </div>
                 <button
@@ -249,7 +248,7 @@ export function GarmentSelectorPanel({
                   onClick={onRetryItems}
                 >
                   <RefreshCw size={13} />
-                  <span>Retry</span>
+                  <span>{t('retryBtn')}</span>
                 </button>
               </div>
             ) : itemsLoading ? (
@@ -288,11 +287,11 @@ export function GarmentSelectorPanel({
                 }}
               >
                 <Shirt size={32} color="#94a3b8" />
-                <div style={{ fontWeight: 600 }}>No matching garments found</div>
+                <div style={{ fontWeight: 600 }}>{t('noItemsFound')}</div>
                 <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)' }}>
                   {searchQuery
-                    ? `No clothing items matched "${searchQuery}".`
-                    : 'No items were returned for this category.'}
+                    ? `"${searchQuery}"`
+                    : ''}
                 </p>
                 {(searchQuery || selectedCategoryId !== null) && (
                   <button
@@ -303,7 +302,7 @@ export function GarmentSelectorPanel({
                       onSelectCategory(null);
                     }}
                   >
-                    Reset Filters
+                    {t('resetFilters')}
                   </button>
                 )}
               </div>
@@ -335,17 +334,20 @@ export function GarmentSelectorPanel({
                         alt={item.name}
                         categoryName={item.categoryName}
                         aspectRatio="4/5"
+                        priority={isSelected}
                       />
 
-                      <div className="product-mini-title">{item.name}</div>
+                      <div className="product-mini-title">
+                        <bdi>{item.name}</bdi>
+                      </div>
 
                       <div className="product-mini-meta">
                         <span className="product-mini-price">
-                          {formatPrice(item.price)}
+                          <bdi dir="ltr">{formatPrice(item.price)}</bdi>
                         </span>
                         <span className="product-variant-tag">
-                          {item.variantCount}{' '}
-                          {item.variantCount === 1 ? 'color' : 'colors'}
+                          <bdi>{item.variantCount}</bdi>{' '}
+                          {item.variantCount === 1 ? t('tabColors') : t('tabColors')}
                         </span>
                       </div>
                     </button>
@@ -368,12 +370,11 @@ export function GarmentSelectorPanel({
             </div>
           ) : !selectedItemDetails ? (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-              Select a garment first to browse its color variants.
+              {t('selectGarmentFirstColors')}
             </p>
           ) : variants.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-              No color variants were returned by the server for{' '}
-              {selectedItemDetails.name}.
+              {t('noVariantsReturned')}
             </p>
           ) : (
             <div className="variant-list">
@@ -389,10 +390,11 @@ export function GarmentSelectorPanel({
                   >
                     <GarmentImage
                       src={variant.imageUrl}
-                      alt={`${selectedItemDetails.name} in ${variant.colorName}`}
+                      alt={`${selectedItemDetails.name} — ${variant.colorName}`}
                       categoryName={selectedItemDetails.categoryName}
                       colorHex={variant.colorHex}
                       aspectRatio="4/5"
+                      priority={isSelected}
                     />
                     <div
                       style={{
@@ -436,7 +438,7 @@ export function GarmentSelectorPanel({
             <div className="skeleton" style={{ height: 140 }} />
           ) : !selectedItemDetails ? (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-              Select a garment to inspect its full description and specifications.
+              {t('noOutfitSelected')}
             </p>
           ) : (
             <>
@@ -453,7 +455,7 @@ export function GarmentSelectorPanel({
                   {selectedItemDetails.categoryName}
                 </span>
                 <h3 style={{ fontSize: '1.1rem', marginTop: 2 }}>
-                  {selectedItemDetails.name}
+                  <bdi>{selectedItemDetails.name}</bdi>
                 </h3>
                 <div
                   style={{
@@ -463,7 +465,7 @@ export function GarmentSelectorPanel({
                     marginTop: 4,
                   }}
                 >
-                  {formatDualPrice(selectedItemDetails.price, usdToEgpRate, language)}
+                  <bdi dir="ltr">{formatDualPrice(selectedItemDetails.price, usdToEgpRate, language)}</bdi>
                 </div>
               </div>
 
@@ -474,8 +476,7 @@ export function GarmentSelectorPanel({
                   lineHeight: 1.55,
                 }}
               >
-                {selectedItemDetails.description ||
-                  'No product description provided by the catalog.'}
+                {selectedItemDetails.description}
               </p>
 
               <button
@@ -498,14 +499,14 @@ export function GarmentSelectorPanel({
                 }}
               >
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                  Manufactured Sizes
+                  {t('manufacturedSizesLabel')}
                 </div>
                 {selectedItemDetails.availableSizes.length > 0 ? (
                   <>
                     <div className="sizes-pill-row">
                       {selectedItemDetails.availableSizes.map((sz) => (
                         <span key={sz} className="size-chip">
-                          {sz}
+                          <bdi>{sz}</bdi>
                         </span>
                       ))}
                     </div>
@@ -516,14 +517,12 @@ export function GarmentSelectorPanel({
                         marginTop: 8,
                       }}
                     >
-                      Note: Listed sizes indicate sizes manufactured for this
-                      design, not live warehouse inventory stock.
+                      {t('sizesManufacturedNote')}
                     </p>
                   </>
                 ) : (
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                    Sizes aren&apos;t available for this item (virtual try-on
-                    showcase piece).
+                    {t('notInSelected')}
                   </p>
                 )}
               </div>
@@ -541,7 +540,7 @@ export function GarmentSelectorPanel({
             onClick={onChooseOutfit}
           >
             <Check size={18} aria-hidden="true" />
-            <span>Choose This Outfit &amp; Close Try-On</span>
+            <span>{t('closeTryOn')}</span>
           </button>
         ) : (
           <button
@@ -555,14 +554,14 @@ export function GarmentSelectorPanel({
                 <Loader2 size={18} className="spin" aria-hidden="true" />
                 <span>
                   {tryOnStatus === 'fetching_token'
-                    ? 'Requesting Token...'
-                    : 'Connecting Try-On...'}
+                    ? t('requestingToken')
+                    : t('connectingTryOn')}
                 </span>
               </>
             ) : (
               <>
                 <Sparkles size={18} aria-hidden="true" />
-                <span>Start Try-On</span>
+                <span>{t('startTryOnBtn')}</span>
               </>
             )}
           </button>
@@ -571,4 +570,3 @@ export function GarmentSelectorPanel({
     </section>
   );
 }
-

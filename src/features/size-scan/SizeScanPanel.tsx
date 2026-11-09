@@ -11,6 +11,7 @@ import {
 import type { Category, FashionItemDetails } from '../../types/api';
 import { getSizeScanEligibility } from '../../utils/garmentHelpers';
 import type { SizeScanPhase } from './useSizeScan';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface SizeScanPanelProps {
   item: FashionItemDetails | null;
@@ -42,6 +43,7 @@ export function SizeScanPanel({
   onCancelScan,
 }: SizeScanPanelProps) {
   const [countdownChoice, setCountdownChoice] = useState<3 | 8>(3);
+  const { t } = useLanguage();
 
   const eligibility = getSizeScanEligibility(item, categories);
   const isScanning =
@@ -61,18 +63,18 @@ export function SizeScanPanel({
   return (
     <section
       className="card bottom-card size-scan-card"
-      aria-label="Find My Size camera body scan"
+      aria-label={t('scanTitle')}
     >
       <div className="bottom-card-header">
         <h2 className="bottom-card-title">
           <ScanLine size={19} color="var(--purple-600)" aria-hidden="true" />
-          <span>Find My Size</span>
+          <span>{t('scanTitle')}</span>
         </h2>
 
         {eligibility.eligible && !isScanning && (
           <div
             role="group"
-            aria-label="Countdown timer before capture"
+            aria-label="Countdown timer"
             style={{
               display: 'inline-flex',
               background: '#ede9fe',
@@ -98,14 +100,14 @@ export function SizeScanPanel({
                   color: countdownChoice === sec ? '#ffffff' : 'var(--purple-700)',
                 }}
               >
-                {sec}s timer
+                {t('scanTimerSec', { sec })}
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Positioning Instructions (exact documented wording + lighting tip) */}
+      {/* Positioning Instructions */}
       <p
         style={{
           fontSize: '0.82rem',
@@ -113,11 +115,9 @@ export function SizeScanPanel({
           lineHeight: 1.48,
         }}
       >
-        Stand 1–2 metres away from the camera. Keep your entire body visible from
-        head to feet, face the camera, and leave a small gap between your arms
-        and body.{' '}
+        {t('scanInstructionsBody')}{' '}
         <span style={{ color: 'var(--text-muted)' }}>
-          Good lighting and a clear, unobstructed view improve accuracy.
+          {t('scanLightingTip')}
         </span>
       </p>
 
@@ -150,15 +150,15 @@ export function SizeScanPanel({
           <div className="scan-ring-center">
             {phase === 'countdown' ? (
               <>
-                <span className="scan-ring-value">{countdownSeconds}</span>
-                <span className="scan-ring-sub">seconds</span>
+                <span className="scan-ring-value"><bdi>{countdownSeconds}</bdi></span>
+                <span className="scan-ring-sub">{t('scanSecondsUnit')}</span>
               </>
             ) : phase === 'capturing' ? (
               <>
                 <span className="scan-ring-value">
-                  {capturedCount}/{totalFramesToCapture}
+                  <bdi>{capturedCount}/{totalFramesToCapture}</bdi>
                 </span>
-                <span className="scan-ring-sub">frames</span>
+                <span className="scan-ring-sub">{t('scanFramesUnit')}</span>
               </>
             ) : phase === 'uploading' ? (
               <>
@@ -168,13 +168,13 @@ export function SizeScanPanel({
                   color="var(--purple-600)"
                 />
                 <span className="scan-ring-sub" style={{ marginTop: 4 }}>
-                  analyzing
+                  {t('scanAnalyzingUnit')}
                 </span>
               </>
             ) : (
               <>
-                <span className="scan-ring-value">{countdownChoice}</span>
-                <span className="scan-ring-sub">sec timer</span>
+                <span className="scan-ring-value"><bdi>{countdownChoice}</bdi></span>
+                <span className="scan-ring-sub">{t('scanSecondsUnit')}</span>
               </>
             )}
           </div>
@@ -183,19 +183,19 @@ export function SizeScanPanel({
         <ul className="pose-checklist">
           <li>
             <Check size={14} color="var(--green-600)" aria-hidden="true" />
-            <span>Full body visible (head to feet)</span>
+            <span>{t('scanChecklist1')}</span>
           </li>
           <li>
             <Check size={14} color="var(--green-600)" aria-hidden="true" />
-            <span>Face the camera directly</span>
+            <span>{t('scanChecklist2')}</span>
           </li>
           <li>
             <Check size={14} color="var(--green-600)" aria-hidden="true" />
-            <span>Small gap between arms &amp; body</span>
+            <span>{t('scanChecklist3')}</span>
           </li>
           <li>
             <Check size={14} color="var(--green-600)" aria-hidden="true" />
-            <span>Stand still in bright lighting</span>
+            <span>{t('scanChecklist4')}</span>
           </li>
         </ul>
       </div>
@@ -207,13 +207,12 @@ export function SizeScanPanel({
           style={{
             display: 'inline',
             verticalAlign: '-2px',
-            marginRight: 5,
+            marginInlineEnd: 6,
             color: 'var(--purple-600)',
           }}
           aria-hidden="true"
         />
-        To find your size, a few photos are sent to our server for analysis and
-        are not stored.
+        <span>{t('scanServerPrivacy')}</span>
       </div>
 
       {/* Action Control based on Eligibility & Camera State */}
@@ -244,10 +243,10 @@ export function SizeScanPanel({
             <Loader2 size={17} className="spin" aria-hidden="true" />
             <span>
               {phase === 'countdown'
-                ? `Starting in ${countdownSeconds}s...`
+                ? t('startingInSec', { sec: countdownSeconds })
                 : phase === 'capturing'
-                ? `Capturing (${capturedCount}/${totalFramesToCapture})...`
-                : 'Analyzing Size...'}
+                ? t('capturingFramesHud', { current: capturedCount, total: totalFramesToCapture })
+                : t('analyzingHud')}
             </span>
           </button>
           <button
@@ -256,7 +255,7 @@ export function SizeScanPanel({
             onClick={onCancelScan}
           >
             <X size={16} aria-hidden="true" />
-            <span>Cancel</span>
+            <span>{t('cancelScan')}</span>
           </button>
         </div>
       ) : !cameraLive ? (
@@ -267,7 +266,7 @@ export function SizeScanPanel({
           style={{ marginTop: 'auto' }}
         >
           <Camera size={17} aria-hidden="true" />
-          <span>Turn On Camera to Find Your Size</span>
+          <span>{t('turnOnCameraForSize')}</span>
         </button>
       ) : (
         <button
@@ -279,12 +278,11 @@ export function SizeScanPanel({
           <ScanLine size={18} aria-hidden="true" />
           <span>
             {tryOnActive
-              ? 'Close Try-On & Scan My Size'
-              : `Find My Size (${item?.name ?? 'Selected Top'})`}
+              ? t('closeTryOnAndScan')
+              : `${t('findMySizeForGarment')}${item?.name ? ` (${item.name})` : ''}`}
           </span>
         </button>
       )}
     </section>
   );
 }
-

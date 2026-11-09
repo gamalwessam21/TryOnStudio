@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import { useLanguage, type TranslationKey } from '../../i18n/LanguageContext';
 
 interface WorkflowStepsRailProps {
   cameraLive: boolean;
@@ -9,42 +10,20 @@ interface WorkflowStepsRailProps {
   hasSizeResult: boolean;
 }
 
-const STEPS = [
-  {
-    num: 1,
-    title: 'Turn on camera',
-    desc: 'Allow camera access and start your mirror session.',
-  },
-  {
-    num: 2,
-    title: 'Select garment',
-    desc: 'Choose your favorite top and color variant.',
-  },
-  {
-    num: 3,
-    title: 'Start try-on',
-    desc: 'Connect to Decart to see yourself wearing it.',
-  },
-  {
-    num: 4,
-    title: 'Swipe to change',
-    desc: 'Swipe left or right with your hand to switch.',
-  },
-  {
-    num: 5,
-    title: 'Choose this outfit',
-    desc: 'Confirm your garment and return to raw camera.',
-  },
-  {
-    num: 6,
-    title: 'Get my size',
-    desc: 'Step 1–2m back while 20 frames are analyzed.',
-  },
-  {
-    num: 7,
-    title: 'See your size',
-    desc: 'View your recommended size and alternatives.',
-  },
+interface StepConfig {
+  num: number;
+  titleKey: TranslationKey;
+  descKey: TranslationKey;
+}
+
+const STEP_CONFIGS: StepConfig[] = [
+  { num: 1, titleKey: 'step1Title', descKey: 'step1Desc' },
+  { num: 2, titleKey: 'step2Title', descKey: 'step2Desc' },
+  { num: 3, titleKey: 'step3Title', descKey: 'step3Desc' },
+  { num: 4, titleKey: 'step4Title', descKey: 'step4Desc' },
+  { num: 5, titleKey: 'step5Title', descKey: 'step5Desc' },
+  { num: 6, titleKey: 'step6Title', descKey: 'step6Desc' },
+  { num: 7, titleKey: 'step7Title', descKey: 'step7Desc' },
 ];
 
 export function WorkflowStepsRail({
@@ -55,6 +34,8 @@ export function WorkflowStepsRail({
   isScanningSize,
   hasSizeResult,
 }: WorkflowStepsRailProps) {
+  const { t } = useLanguage();
+
   function getStepState(num: number): 'done' | 'current' | 'upcoming' {
     switch (num) {
       case 1:
@@ -83,14 +64,14 @@ export function WorkflowStepsRail({
   }
 
   return (
-    <aside className="card steps-rail" aria-label="How it works steps">
+    <aside className="card steps-rail" aria-label={t('workflowTitle')}>
       <div className="steps-rail-header">
-        <h2>How it works</h2>
-        <p>Get your fit in 7 guided steps</p>
+        <h2>{t('workflowTitle')}</h2>
+        <p>{t('workflowSubtitle')}</p>
       </div>
 
       <ol className="steps-list">
-        {STEPS.map((step) => {
+        {STEP_CONFIGS.map((step) => {
           const state = getStepState(step.num);
           return (
             <li
@@ -100,11 +81,11 @@ export function WorkflowStepsRail({
               }`}
             >
               <span className="step-num" aria-hidden="true">
-                {state === 'done' ? <Check size={13} strokeWidth={3} /> : step.num}
+                {state === 'done' ? <Check size={13} strokeWidth={3} /> : <bdi>{step.num}</bdi>}
               </span>
               <div>
-                <div className="step-title">{step.title}</div>
-                <div className="step-desc">{step.desc}</div>
+                <div className="step-title">{t(step.titleKey)}</div>
+                <div className="step-desc">{t(step.descKey)}</div>
               </div>
             </li>
           );
@@ -113,4 +94,3 @@ export function WorkflowStepsRail({
     </aside>
   );
 }
-

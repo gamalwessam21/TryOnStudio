@@ -22,6 +22,7 @@ import type {
 } from './useGestureNavigation';
 import type { SwipeDirection } from './swipeDetector';
 import type { SizeScanPhase } from '../size-scan/useSizeScan';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface CameraMirrorPanelProps {
   cameraVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -76,6 +77,8 @@ export function CameraMirrorPanel({
   totalFramesToCapture,
   selectedLabel,
 }: CameraMirrorPanelProps) {
+  const { t } = useLanguage();
+
   const isTryOnConnected =
     (tryOnStatus === 'connected' || tryOnStatus === 'switching_garment') &&
     hasRemoteStream;
@@ -88,7 +91,7 @@ export function CameraMirrorPanel({
   return (
     <section
       className="mirror-card"
-      aria-label="Camera and virtual try-on mirror"
+      aria-label={t('mirrorTitle')}
     >
       {/* Video Stage */}
       <div className="mirror-stage">
@@ -98,7 +101,7 @@ export function CameraMirrorPanel({
           playsInline
           muted
           autoPlay
-          aria-label="Live webcam camera preview"
+          aria-label="Live camera preview"
           className={`mirror-video ${mirrorView ? 'mirrored' : ''} ${
             cameraStatus !== 'live' || isTryOnConnected ? 'hidden' : ''
           }`}
@@ -110,7 +113,7 @@ export function CameraMirrorPanel({
           playsInline
           muted
           autoPlay
-          aria-label="AI virtual try-on output stream"
+          aria-label="AI virtual try-on stream"
           className={`mirror-video ${!isTryOnConnected ? 'hidden' : ''}`}
         />
       </div>
@@ -133,8 +136,8 @@ export function CameraMirrorPanel({
               <Sparkles size={14} aria-hidden="true" />
               <span>
                 {tryOnStatus === 'switching_garment'
-                  ? 'Switching Garment...'
-                  : 'Virtual Try-On Active'}
+                  ? t('switchingGarment')
+                  : t('virtualTryOnActive')}
               </span>
             </div>
           ) : isTryOnConnecting ? (
@@ -142,24 +145,24 @@ export function CameraMirrorPanel({
               <Loader2 size={14} className="spin" aria-hidden="true" />
               <span>
                 {tryOnStatus === 'fetching_token'
-                  ? 'Requesting Try-On Token...'
-                  : 'Connecting to Decart (2–5s)...'}
+                  ? t('requestingToken')
+                  : t('connectingToService')}
               </span>
             </div>
           ) : cameraStatus === 'live' ? (
             <div className="mirror-status-pill live" role="status">
               <span className="status-dot" aria-hidden="true" />
-              <span>Camera Preview (AI Try-On Off)</span>
+              <span>{t('cameraPreviewOnly')}</span>
             </div>
           ) : cameraStatus === 'requesting' ? (
             <div className="mirror-status-pill" role="status">
               <Loader2 size={14} className="spin" aria-hidden="true" />
-              <span>Waiting for Camera Permission...</span>
+              <span>{t('waitingPermission')}</span>
             </div>
           ) : (
             <div className="mirror-status-pill" role="status">
               <CameraOff size={14} aria-hidden="true" />
-              <span>Camera Off</span>
+              <span>{t('cameraOff')}</span>
             </div>
           )}
 
@@ -168,7 +171,7 @@ export function CameraMirrorPanel({
               className="mirror-status-pill"
               title={`Selected garment: ${selectedLabel}`}
             >
-              <span>Selected: {selectedLabel}</span>
+              <span>{t('selectedOutfitTitle')}: <bdi>{selectedLabel}</bdi></span>
             </div>
           )}
         </div>
@@ -180,10 +183,10 @@ export function CameraMirrorPanel({
               className="mirror-glass-btn"
               onClick={onToggleMirror}
               aria-pressed={mirrorView}
-              title="Toggle mirror reflection view for webcam preview"
+              title="Toggle mirror reflection view"
             >
               <FlipHorizontal2 size={15} aria-hidden="true" />
-              <span>{mirrorView ? 'Mirror View' : 'Standard View'}</span>
+              <span>{mirrorView ? t('mirrorViewBtn') : t('standardView')}</span>
             </button>
           )}
 
@@ -192,10 +195,10 @@ export function CameraMirrorPanel({
               type="button"
               className="mirror-glass-btn"
               onClick={onDisconnectTryOn}
-              aria-label="Disconnect AI virtual try-on session"
+              aria-label={t('endTryOn')}
             >
               <X size={15} aria-hidden="true" />
-              <span>End Try-On</span>
+              <span>{t('endTryOn')}</span>
             </button>
           )}
         </div>
@@ -204,9 +207,7 @@ export function CameraMirrorPanel({
       {/* Recognized Hand-Swipe Toast */}
       {lastGesture && isTryOnConnected && (
         <div className="mirror-gesture-toast" role="status" aria-live="polite">
-          {lastGesture.direction === 'next'
-            ? 'Hand Swipe Right → Next Garment'
-            : '← Hand Swipe Left · Previous Garment'}
+          {lastGesture.direction === 'next' ? t('swipeNext') : t('swipePrev')}
         </div>
       )}
 
@@ -217,12 +218,12 @@ export function CameraMirrorPanel({
         <div className="mirror-scan-hud" role="status" aria-live="assertive">
           {scanPhase === 'countdown' && (
             <>
-              <div className="mirror-countdown-number">{countdownSeconds}</div>
+              <div className="mirror-countdown-number"><bdi>{countdownSeconds}</bdi></div>
               <div style={{ fontWeight: 700, fontSize: '1.08rem' }}>
-                Step back 1–2 metres &amp; keep head-to-feet visible
+                {t('stepBackInstruction')}
               </div>
               <div style={{ fontSize: '0.86rem', color: '#e2e8f0' }}>
-                Face the camera with a small gap between your arms and body
+                {t('standFacingInstruction')}
               </div>
             </>
           )}
@@ -231,11 +232,10 @@ export function CameraMirrorPanel({
             <>
               <Loader2 size={46} className="spin" aria-hidden="true" />
               <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                Hold Still — Capturing Frame {capturedCount} of{' '}
-                {totalFramesToCapture}
+                {t('capturingHud', { current: capturedCount, total: totalFramesToCapture })}
               </div>
               <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
-                Keep your posture steady for 3 seconds...
+                {t('holdSteady')}
               </div>
             </>
           )}
@@ -244,11 +244,10 @@ export function CameraMirrorPanel({
             <>
               <Loader2 size={46} className="spin" aria-hidden="true" />
               <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                Analyzing Your Body Proportions...
+                {t('analyzingHud')}
               </div>
               <div style={{ fontSize: '0.84rem', color: '#e2e8f0', maxWidth: 340 }}>
-                Comparing measurements with this garment&apos;s size chart (may
-                take up to 60s if waking up).
+                {t('analyzingDesc')}
               </div>
             </>
           )}
@@ -267,20 +266,20 @@ export function CameraMirrorPanel({
           </div>
           <h2 className="mirror-empty-title">
             {cameraStatus === 'requesting'
-              ? 'Allow Camera Access in Your Browser'
-              : 'Interactive Virtual Mirror'}
+              ? t('allowCameraTitle')
+              : t('mirrorTitle')}
           </h2>
           <p className="mirror-empty-desc">
             {cameraStatus === 'requesting'
-              ? 'Click "Allow" in your browser prompt to start your live camera preview.'
-              : 'Turn on your camera when you are ready to preview outfits, start live AI virtual try-on, or scan your recommended clothing size. Camera access requires HTTPS.'}
+              ? t('allowCameraDesc')
+              : t('cameraGuidanceDesc')}
           </p>
 
           {cameraError && (
             <div
               className="banner banner-error"
               role="alert"
-              style={{ textAlign: 'left', width: '100%' }}
+              style={{ textAlign: 'start', width: '100%' }}
             >
               <AlertTriangle
                 size={18}
@@ -299,7 +298,7 @@ export function CameraMirrorPanel({
           >
             <Camera size={18} aria-hidden="true" />
             <span>
-              {cameraStatus === 'error' ? 'Retry Camera Access' : 'Turn On Camera'}
+              {cameraStatus === 'error' ? t('retryCameraAccess') : t('turnOnCamera')}
             </span>
           </button>
         </div>
@@ -347,7 +346,7 @@ export function CameraMirrorPanel({
             <button
               type="button"
               onClick={onDismissTryOnError}
-              aria-label="Dismiss virtual try-on notice"
+              aria-label={t('dismissBanner')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -366,7 +365,7 @@ export function CameraMirrorPanel({
               onClick={onRetryTryOn}
             >
               <RefreshCw size={13} aria-hidden="true" />
-              <span>Retry Try-On</span>
+              <span>{t('retryTryOn')}</span>
             </button>
           </div>
         </div>
@@ -381,7 +380,7 @@ export function CameraMirrorPanel({
             onClick={onStopCamera}
           >
             <CameraOff size={15} aria-hidden="true" />
-            <span>Turn Off Camera</span>
+            <span>{t('turnOffCamera')}</span>
           </button>
         ) : (
           <span />
@@ -405,10 +404,10 @@ export function CameraMirrorPanel({
               <Hand size={15} aria-hidden="true" />
               <span>
                 {gestureStatus === 'ready'
-                  ? 'Swipe left or right to change garment'
+                  ? t('swipeOrArrows')
                   : gestureStatus === 'loading'
-                  ? 'Loading gesture tracker...'
-                  : 'Use arrows to switch garment'}
+                  ? t('loadingGestureTracker')
+                  : t('useArrowsToSwitch')}
               </span>
             </span>
 
@@ -428,4 +427,3 @@ export function CameraMirrorPanel({
     </section>
   );
 }
-

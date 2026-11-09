@@ -134,7 +134,7 @@ export function LoyaltyPage() {
               : 'Points balances are authoritatively verified. A phone number alone cannot spend points without proof of ownership.'}
           </p>
           <div className="rule-rate-tag">
-            Ledger Protected
+            {language === 'ar' ? 'سجل معاملات موثق' : 'Ledger Protected'}
           </div>
         </div>
       </section>
@@ -206,7 +206,7 @@ export function LoyaltyPage() {
                 <input
                   type="text"
                   className="checkout-input otp"
-                  placeholder="6-digit code"
+                  placeholder={language === 'ar' ? 'رمز التأكيد' : '6-digit code'}
                   value={codeInput}
                   onChange={(e) => setCodeInput(e.target.value)}
                   maxLength={8}
@@ -366,7 +366,13 @@ export function LoyaltyPage() {
                               ) : (
                                 <TrendingDown size={13} />
                               )}
-                              <span>{tx.type.toUpperCase()}</span>
+                              <span>
+                                {tx.type === 'earn'
+                                  ? t('earnedPointsBadge')
+                                  : tx.type === 'redeem'
+                                  ? t('redeemedPointsBadge')
+                                  : t('adjustedPointsBadge')}
+                              </span>
                             </span>
                           </td>
                           <td>{tx.description}</td>
@@ -377,7 +383,7 @@ export function LoyaltyPage() {
                                 className="ledger-order-link"
                                 onClick={() => navigate(`/orders/${encodeURIComponent(tx.orderNumber!)}`)}
                               >
-                                {tx.orderNumber}
+                                <bdi>{tx.orderNumber}</bdi>
                               </button>
                             ) : (
                               '—'
@@ -442,3 +448,4 @@ export function LoyaltyPage() {
     </div>
   );
 }
+

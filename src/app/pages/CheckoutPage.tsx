@@ -337,7 +337,7 @@ export function CheckoutPage() {
 
               <div className="checkout-item-details">
                 <div className="checkout-item-cat">{activeItem.categoryName}</div>
-                <h3 className="checkout-item-name">{activeItem.name}</h3>
+                <h3 className="checkout-item-name"><bdi>{activeItem.name}</bdi></h3>
                 {activeItem.colorName && (
                   <div className="checkout-item-color">
                     <span
@@ -351,10 +351,10 @@ export function CheckoutPage() {
 
                 <div className="checkout-item-price-row">
                   <span className="checkout-item-price-egp">
-                    {formatEgp(unitPriceEgp, language)}
+                    <bdi dir="ltr">{formatEgp(unitPriceEgp, language)}</bdi>
                   </span>
                   <span className="checkout-item-price-usd">
-                    (${activeItem.unitPriceUsd.toFixed(2)} USD)
+                    <bdi dir="ltr">(${activeItem.unitPriceUsd.toFixed(2)} USD)</bdi>
                   </span>
                 </div>
 
@@ -375,7 +375,7 @@ export function CheckoutPage() {
                             onClick={() => updateCheckoutSize(sz)}
                             aria-pressed={isChosen}
                           >
-                            {sz}
+                            <bdi>{sz}</bdi>
                           </button>
                         );
                       })}
@@ -671,9 +671,9 @@ export function CheckoutPage() {
             <div className="summary-lines-stack">
               <div className="summary-line">
                 <span>
-                  {activeItem.name} {activeItem.size ? `(${activeItem.size})` : ''} × {quantity}
+                  <bdi>{activeItem.name}</bdi> {activeItem.size ? `(${activeItem.size})` : ''} × <bdi>{quantity}</bdi>
                 </span>
-                <span>{formatEgp(subtotalEgp, language)}</span>
+                <span><bdi dir="ltr">{formatEgp(subtotalEgp, language)}</bdi></span>
               </div>
 
               {appliedDiscountEgp > 0 && (
@@ -681,7 +681,7 @@ export function CheckoutPage() {
                   <span>
                     {language === 'ar' ? 'خصم نقاط الولاء' : 'Loyalty Points Discount'}
                   </span>
-                  <span>-{formatEgp(appliedDiscountEgp, language)}</span>
+                  <span>-<bdi dir="ltr">{formatEgp(appliedDiscountEgp, language)}</bdi></span>
                 </div>
               )}
 
@@ -694,11 +694,11 @@ export function CheckoutPage() {
                 <div>
                   <div className="summary-total-label">{language === 'ar' ? 'الإجمالي النهائي' : 'Final Total'}</div>
                   <div className="summary-total-sub">
-                    {formatDualPrice((finalTotalEgp / (usdToEgpRate || 50)), usdToEgpRate, language)}
+                    <bdi dir="ltr">{formatDualPrice((finalTotalEgp / (usdToEgpRate || 50)), usdToEgpRate, language)}</bdi>
                   </div>
                 </div>
                 <div className="summary-total-amount">
-                  {formatEgp(finalTotalEgp, language)}
+                  <bdi dir="ltr">{formatEgp(finalTotalEgp, language)}</bdi>
                 </div>
               </div>
             </div>
@@ -738,11 +738,11 @@ export function CheckoutPage() {
             </button>
 
             <div className="checkout-trust-badges">
-              <span>🔒 256-bit Secure</span>
+              <span>🔒 {language === 'ar' ? 'تشفير 256-bit آمن' : '256-bit Secure'}</span>
               <span>•</span>
-              <span>Honest Pricing</span>
+              <span>{language === 'ar' ? 'أسعار شفافة' : 'Honest Pricing'}</span>
               <span>•</span>
-              <span>Official Receipt</span>
+              <span>{language === 'ar' ? 'إيصال رسمي' : 'Official Receipt'}</span>
             </div>
           </div>
         </aside>
@@ -750,3 +750,4 @@ export function CheckoutPage() {
     </div>
   );
 }
+

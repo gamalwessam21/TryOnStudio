@@ -82,11 +82,10 @@ export function BrowsePage() {
       >
         <div>
           <h1 style={{ fontSize: '1.45rem', fontWeight: 800 }}>
-            Browse Clothing &amp; 360° Rack
+            {t('browseTitle')}
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Explore all live garments from the Try On Studio catalog, rotate
-            pieces in 360°, and open any item directly in the virtual mirror.
+            {t('browseSubtitle')}
           </p>
         </div>
       </div>
@@ -101,7 +100,7 @@ export function BrowsePage() {
       />
 
       {/* Full Catalog Section */}
-      <section aria-label="Full clothing catalog">
+      <section aria-label={t('browseTitle')}>
         <div
           style={{
             display: 'flex',
@@ -121,7 +120,7 @@ export function BrowsePage() {
               onClick={() => setSelectedCategoryId(null)}
             >
               <Layers size={16} aria-hidden="true" />
-              <span>All Categories</span>
+              <span>{t('allCategories')}</span>
             </button>
 
             {categories.map((cat) => (
@@ -136,7 +135,7 @@ export function BrowsePage() {
                 <Shirt size={16} aria-hidden="true" />
                 <span>{cat.name}</span>
                 <span className="category-pill-count">
-                  {cat.itemCount} items
+                  <bdi>{cat.itemCount}</bdi>
                 </span>
               </button>
             ))}
@@ -148,7 +147,7 @@ export function BrowsePage() {
               className="btn btn-sm btn-secondary"
               onClick={() => setSearchQuery('')}
             >
-              Clear Search (&ldquo;{searchQuery}&rdquo;)
+              {t('clearSearch')} (&ldquo;{searchQuery}&rdquo;)
             </button>
           )}
         </div>
@@ -163,7 +162,7 @@ export function BrowsePage() {
               onClick={() => void reloadItems()}
             >
               <RefreshCw size={13} />
-              <span>Retry</span>
+              <span>{t('retryBtn')}</span>
             </button>
           </div>
         ) : itemsLoading ? (
@@ -198,7 +197,7 @@ export function BrowsePage() {
             }}
           >
             <Shirt size={36} color="#94a3b8" />
-            <h3>No clothing items matched your filter</h3>
+            <h3>{t('noProductsFound')}</h3>
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -207,7 +206,7 @@ export function BrowsePage() {
                 setSelectedCategoryId(null);
               }}
             >
-              Show All Clothing
+              {t('resetFilters')}
             </button>
           </div>
         ) : (
@@ -240,13 +239,13 @@ export function BrowsePage() {
                     {item.categoryName}
                   </span>
                   <span className="product-variant-tag">
-                    {item.variantCount}{' '}
-                    {item.variantCount === 1 ? 'variant' : 'variants'}
+                    <bdi>{item.variantCount}</bdi>{' '}
+                    {t('tabColors')}
                   </span>
                 </div>
 
                 <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>
-                  {item.name}
+                  <bdi>{item.name}</bdi>
                 </h2>
 
                 <p
@@ -272,7 +271,7 @@ export function BrowsePage() {
                     color: 'var(--accent)',
                   }}
                 >
-                  {formatDualPrice(item.price, usdToEgpRate, language)}
+                  <bdi dir="ltr">{formatDualPrice(item.price, usdToEgpRate, language)}</bdi>
                 </div>
 
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -313,4 +312,3 @@ export function BrowsePage() {
     </div>
   );
 }
-

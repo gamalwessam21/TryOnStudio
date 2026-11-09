@@ -15,8 +15,10 @@ import {
   formatPrice,
   getSizeScanEligibility,
 } from '../../utils/garmentHelpers';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export function SizeGuidePage() {
+  const { t } = useLanguage();
   const {
     categories,
     allCatalogItems,
@@ -57,12 +59,10 @@ export function SizeGuidePage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h1 style={{ fontSize: '1.45rem', fontWeight: 800 }}>
-          Find My Size — AI Camera Scan &amp; Size Availability
+          {t('sizeGuideTitle')}
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Select a top from the catalog, position yourself 1–2 metres from your
-          camera, and get an estimated size matched against that garment&apos;s
-          manufactured sizes.
+          {t('sizeGuideSubtitle')}
         </p>
       </div>
 
@@ -77,16 +77,17 @@ export function SizeGuidePage() {
           gap: 16,
           flexWrap: 'wrap',
         }}
-        aria-label="Select clothing item for size scan"
+        aria-label={t('selectedOutfitTitle')}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {selectedItemDetails && (
             <div style={{ width: 58, flexShrink: 0 }}>
               <GarmentImage
-                src={selectedVariant?.imageUrl}
+                src={selectedVariant?.imageUrl || selectedItemDetails.thumbnailUrl}
                 alt={selectedItemDetails.name}
                 categoryName={selectedItemDetails.categoryName}
                 aspectRatio="4/5"
+                priority={true}
               />
             </div>
           )}
@@ -101,7 +102,7 @@ export function SizeGuidePage() {
                 marginBottom: 4,
               }}
             >
-              Garment Being Sized
+              {t('selectedOutfitTitle')}
             </label>
             <select
               id="size-page-item-select"
@@ -130,13 +131,13 @@ export function SizeGuidePage() {
         {selectedItemDetails && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Manufactured sizes for {selectedItemDetails.name}:
+              {t('manufacturedSizesLabel')}: <bdi>{selectedItemDetails.name}</bdi>
             </span>
             {selectedItemDetails.availableSizes.length > 0 ? (
               <div className="sizes-pill-row">
                 {selectedItemDetails.availableSizes.map((sz) => (
                   <span key={sz} className="size-chip">
-                    {sz}
+                    <bdi>{sz}</bdi>
                   </span>
                 ))}
               </div>
@@ -148,7 +149,7 @@ export function SizeGuidePage() {
                   color: 'var(--amber-700)',
                 }}
               >
-                Sizes aren&apos;t available for this item.
+                {t('notInSelected')}
               </span>
             )}
           </div>
@@ -168,7 +169,7 @@ export function SizeGuidePage() {
         <section
           className="mirror-card"
           style={{ minHeight: 420 }}
-          aria-label="Camera preview for size scan"
+          aria-label={t('mirrorTitle')}
         >
           <div className="mirror-stage">
             <video
@@ -191,8 +192,8 @@ export function SizeGuidePage() {
               <span className="status-dot" aria-hidden="true" />
               <span>
                 {camera.status === 'live'
-                  ? 'Camera Ready for Size Scan'
-                  : 'Camera Off'}
+                  ? t('cameraActive')
+                  : t('cameraOff')}
               </span>
             </div>
 
@@ -203,7 +204,7 @@ export function SizeGuidePage() {
                 onClick={() => camera.setMirrorView((m) => !m)}
               >
                 <FlipHorizontal2 size={14} aria-hidden="true" />
-                <span>{camera.mirrorView ? 'Mirrored' : 'Standard'}</span>
+                <span>{camera.mirrorView ? t('mirrorViewBtn') : t('standardView')}</span>
               </button>
             )}
           </div>
@@ -215,25 +216,27 @@ export function SizeGuidePage() {
               {sizeScan.phase === 'countdown' ? (
                 <>
                   <div className="mirror-countdown-number">
-                    {sizeScan.countdownSeconds}
+                    <bdi>{sizeScan.countdownSeconds}</bdi>
                   </div>
                   <div style={{ fontWeight: 700 }}>
-                    Step back 1–2m · Keep head-to-feet visible
+                    {t('stepBackInstruction')}
                   </div>
                 </>
               ) : sizeScan.phase === 'capturing' ? (
                 <>
                   <Loader2 size={42} className="spin" />
                   <div style={{ fontWeight: 700 }}>
-                    Capturing Frame {sizeScan.capturedCount} /{' '}
-                    {sizeScan.totalFramesToCapture}
+                    {t('capturingHud', {
+                      current: sizeScan.capturedCount,
+                      total: sizeScan.totalFramesToCapture,
+                    })}
                   </div>
                 </>
               ) : (
                 <>
                   <Loader2 size={42} className="spin" />
                   <div style={{ fontWeight: 700 }}>
-                    Analyzing Your Size (up to 60s)...
+                    {t('analyzingHud')}
                   </div>
                 </>
               )}
@@ -245,10 +248,9 @@ export function SizeGuidePage() {
               <div className="mirror-empty-icon">
                 <Camera size={28} />
               </div>
-              <h2 className="mirror-empty-title">Camera Preview</h2>
+              <h2 className="mirror-empty-title">{t('mirrorTitle')}</h2>
               <p className="mirror-empty-desc">
-                Enable your webcam to position your full body in frame before
-                starting the countdown.
+                {t('cameraGuidanceDesc')}
               </p>
               {camera.errorMessage && (
                 <div className="banner banner-error" role="alert">
@@ -261,7 +263,7 @@ export function SizeGuidePage() {
                 onClick={() => void camera.startCamera()}
               >
                 <Camera size={17} />
-                <span>Turn On Camera</span>
+                <span>{t('turnOnCamera')}</span>
               </button>
             </div>
           )}
@@ -274,7 +276,7 @@ export function SizeGuidePage() {
                 onClick={camera.stopCamera}
               >
                 <CameraOff size={14} />
-                <span>Turn Off Camera</span>
+                <span>{t('turnOffCamera')}</span>
               </button>
             </div>
           )}
@@ -309,4 +311,3 @@ export function SizeGuidePage() {
     </div>
   );
 }
-

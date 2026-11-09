@@ -121,6 +121,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const detailsReqSeq = useRef(0);
   const detailsAbortRef = useRef<AbortController | null>(null);
   const preferredVariantRef = useRef<number | undefined>(undefined);
+  const catalogItemsRef = useRef<FashionItem[]>([]);
 
   // Debounce search input
   useEffect(() => {
@@ -213,6 +214,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       if (seq !== itemsReqSeq.current) return;
 
       setItems(result);
+      catalogItemsRef.current = result;
       if (selectedCategoryId === null && !debouncedSearch) {
         setAllCatalogItems(result);
       }
@@ -267,8 +269,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             ? explicitSizes
             : details.availableSizes ?? [];
 
+        const matchingCatalogItem = catalogItemsRef.current.find((i) => i.id === id);
+        const resolvedThumbnailUrl =
+          details.thumbnailUrl ??
+          matchingCatalogItem?.thumbnailUrl ??
+          mergedVariants[0]?.imageUrl ??
+          null;
+
         const normalizedDetails: FashionItemDetails = {
           ...details,
+          thumbnailUrl: resolvedThumbnailUrl,
           variants: mergedVariants,
           availableSizes: mergedSizes,
         };

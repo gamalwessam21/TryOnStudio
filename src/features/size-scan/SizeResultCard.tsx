@@ -18,6 +18,7 @@ import type {
 } from '../../types/api';
 import { normalizeConfidence } from '../../utils/garmentHelpers';
 import type { FormattedScanError, SizeScanPhase } from './useSizeScan';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface SizeResultCardProps {
   item: FashionItemDetails | null;
@@ -40,6 +41,7 @@ export function SizeResultCard({
   canRetryScan,
   onRetryScan,
 }: SizeResultCardProps) {
+  const { t } = useLanguage();
   const [selectedCheckSize, setSelectedCheckSize] = useState<string>('M');
   const [checkLoading, setCheckLoading] = useState<boolean>(false);
   const [checkResult, setCheckResult] = useState<SizeCheckResult | null>(null);
@@ -67,6 +69,13 @@ export function SizeResultCard({
       ? supportedSizes
       : ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
+  function getConfLabel(conf: string): string {
+    if (conf === 'high') return t('highConf');
+    if (conf === 'medium') return t('mediumConf');
+    if (conf === 'low') return t('lowConf');
+    return conf;
+  }
+
   async function handleManualSizeCheck() {
     if (!item) return;
     setCheckLoading(true);
@@ -91,7 +100,7 @@ export function SizeResultCard({
       className={`card bottom-card size-result-card ${
         isScanForCurrentItem ? 'has-result' : ''
       }`}
-      aria-label="Your size recommendation and availability"
+      aria-label={t('sizeFitCheckTitle')}
     >
       <div className="bottom-card-header">
         <h2 className="bottom-card-title">
@@ -104,7 +113,7 @@ export function SizeResultCard({
           ) : (
             <Ruler size={19} color="var(--blue-600)" aria-hidden="true" />
           )}
-          <span>Your Size &amp; Fit Check</span>
+          <span>{t('sizeFitCheckTitle')}</span>
         </h2>
 
         {isScanForCurrentItem && canRetryScan && (
@@ -114,7 +123,7 @@ export function SizeResultCard({
             onClick={onRetryScan}
           >
             <RefreshCw size={13} aria-hidden="true" />
-            <span>Scan Again</span>
+            <span>{t('rescanBtn')}</span>
           </button>
         )}
       </div>
@@ -124,25 +133,25 @@ export function SizeResultCard({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="recommended-size-hero">
             <div className="size-badge-xl">
-              {scanResult.borderline && scanResult.sizeRange
-                ? scanResult.sizeRange
-                : scanResult.size || '—'}
+              <bdi>
+                {scanResult.borderline && scanResult.sizeRange
+                  ? scanResult.sizeRange
+                  : scanResult.size || '—'}
+              </bdi>
             </div>
 
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
                 {scanResult.borderline && scanResult.sizeRange
-                  ? `Between ${scanResult.sizeRange} (Primary: ${
-                      scanResult.size ?? scanResult.sizeRange
-                    })`
-                  : `Recommended Size: ${scanResult.size ?? 'Unavailable'}`}
+                  ? `${t('recommendedSizeTitle')}: ${scanResult.sizeRange} (${scanResult.size ?? scanResult.sizeRange})`
+                  : `${t('recommendedSizeTitle')}: ${scanResult.size ?? '—'}`}
               </div>
               {scanResult.borderline && (
                 <span
                   className="borderline-pill"
                   style={{ display: 'inline-block', marginTop: 4 }}
                 >
-                  Borderline fit — size up for a looser drape
+                  {t('borderlineDrapeTip')}
                 </span>
               )}
             </div>
@@ -151,9 +160,9 @@ export function SizeResultCard({
           {/* Confidence Indicator */}
           <div className="confidence-meter">
             <span>
-              Confidence:{' '}
+              {t('confidenceLabel')}:{' '}
               <strong style={{ textTransform: 'capitalize' }}>
-                {isSingleSizeItem ? 'Single-size item' : normalizedConf}
+                {isSingleSizeItem ? t('notInSelected') : getConfLabel(normalizedConf)}
               </strong>
             </span>
             {normalizedConf !== 'unavailable' && (
@@ -178,21 +187,14 @@ export function SizeResultCard({
           {normalizedConf === 'low' && (
             <div className="banner banner-warning">
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-              <span>
-                Confidence was low. For a more accurate recommendation, step
-                1–2m back in bright lighting with head-to-feet visible and scan
-                again.
-              </span>
+              <span>{t('confidenceLowWarning')}</span>
             </div>
           )}
 
           {isSingleSizeItem && (
             <div className="banner banner-info">
               <Info size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-              <span>
-                This item is only manufactured in one size ({scanResult.size}),
-                so it was selected directly.
-              </span>
+              <span>{t('singleSizeItemNotice', { size: scanResult.size || 'ONE' })}</span>
             </div>
           )}
 
@@ -206,10 +208,10 @@ export function SizeResultCard({
                     fontWeight: 600,
                   }}
                 >
-                  Alternative Manufactured Size
+                  {t('altManufacturedSize')}
                 </div>
                 <div style={{ fontSize: '0.98rem', fontWeight: 700 }}>
-                  {scanResult.alternative}
+                  <bdi>{scanResult.alternative}</bdi>
                 </div>
               </div>
               <span
@@ -218,7 +220,7 @@ export function SizeResultCard({
                   color: 'var(--text-secondary)',
                 }}
               >
-                Secondary fit option
+                {t('secondaryFitOption')}
               </span>
             </div>
           )}
@@ -233,10 +235,7 @@ export function SizeResultCard({
             }}
           >
             <Info size={14} style={{ flexShrink: 0, marginTop: 2 }} />
-            <span>
-              Camera body scan is an estimate offered within this product&apos;s
-              manufactured sizes (does not reflect live warehouse stock).
-            </span>
+            <span>{t('cameraDisclaimer')}</span>
           </div>
         </div>
       ) : isErrorForCurrentItem && scanError ? (
@@ -259,7 +258,7 @@ export function SizeResultCard({
                     opacity: 0.92,
                   }}
                 >
-                  Tip: {scanError.recoveryHint}
+                  {scanError.recoveryHint}
                 </div>
               )}
             </div>
@@ -273,16 +272,14 @@ export function SizeResultCard({
               style={{ alignSelf: 'flex-end' }}
             >
               <RefreshCw size={13} aria-hidden="true" />
-              <span>Try Scan Again</span>
+              <span>{t('rescanBtn')}</span>
             </button>
           )}
         </div>
       ) : (
         /* 3. Idle Prompt before Scan */
         <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-          Run <strong>Find My Size</strong> to see your AI-estimated size here,
-          or check whether a specific size is manufactured for the selected item
-          below.
+          {t('idleScanPrompt')}
         </p>
       )}
 
@@ -305,7 +302,7 @@ export function SizeResultCard({
               color: 'var(--text-primary)',
             }}
           >
-            Check Manufactured Size Offering
+            {t('checkSizeOffering')}
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -319,7 +316,7 @@ export function SizeResultCard({
                 clip: 'rect(0,0,0,0)',
               }}
             >
-              Size to check
+              {t('sizeCol')}
             </label>
             <select
               id="manual-size-check-select"
@@ -352,7 +349,7 @@ export function SizeResultCard({
               {checkLoading ? (
                 <Loader2 size={14} className="spin" />
               ) : (
-                <span>Check Size</span>
+                <span>{t('checkSizeBtn')}</span>
               )}
             </button>
           </div>
@@ -376,30 +373,32 @@ export function SizeResultCard({
               role="status"
             >
               {checkResult.availableSizes.length === 0 ? (
-                <span>Sizes aren&apos;t available for this item.</span>
+                <span>{t('notInSelected')}</span>
               ) : checkResult.isAvailable ? (
                 <>
                   <strong>
-                    Size {checkResult.requestedSize} is manufactured for{' '}
-                    {item.name}.
+                    {t('sizeIsManufactured', {
+                      size: checkResult.requestedSize,
+                      name: item.name,
+                    })}
                   </strong>
                   <span style={{ fontSize: '0.76rem', opacity: 0.9 }}>
-                    Indicates manufactured size offering (not live stock
-                    inventory).
+                    {t('sizesManufacturedNote')}
                   </span>
                 </>
               ) : (
                 <>
                   <strong>
-                    Size {checkResult.requestedSize} is not manufactured for{' '}
-                    {item.name}.
+                    {t('sizeNotManufactured', {
+                      size: checkResult.requestedSize,
+                      name: item.name,
+                    })}
                   </strong>
                   {checkResult.nearestAvailableSizes.length > 0 && (
                     <span>
-                      Nearest manufactured alternatives:{' '}
-                      <strong>
-                        {checkResult.nearestAvailableSizes.join(', ')}
-                      </strong>
+                      {t('nearestAlternatives', {
+                        sizes: checkResult.nearestAvailableSizes.join(', '),
+                      })}
                     </span>
                   )}
                 </>
@@ -411,4 +410,3 @@ export function SizeResultCard({
     </section>
   );
 }
-

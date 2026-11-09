@@ -540,7 +540,19 @@ video {
     transition: transform var(--duration-normal) var(--ease-standard);
   }
 
+  [dir="rtl"] .sidebar {
+    left: auto;
+    right: 0;
+    border-right: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    transform: translateX(100%);
+  }
+
   .sidebar.open {
+    transform: translateX(0);
+  }
+
+  [dir="rtl"] .sidebar.open {
     transform: translateX(0);
   }
 
@@ -560,7 +572,7 @@ video {
   }
 
   .main-content {
-    padding: 14px 14px 28px;
+    padding: 14px 14px 96px;
   }
 
   .api-status-label-text {
@@ -575,7 +587,7 @@ video {
   }
 
   .main-content {
-    padding: 10px 10px 24px;
+    padding: 10px 10px 96px;
   }
 
   .btn {

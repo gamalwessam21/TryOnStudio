@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface GarmentImageProps {
   src?: string | null;
@@ -8,6 +8,7 @@ interface GarmentImageProps {
   aspectRatio?: '4/5' | '3/4' | '1/1';
   className?: string;
   transparentBg?: boolean;
+  priority?: boolean;
 }
 
 export function GarmentImage({
@@ -18,13 +19,20 @@ export function GarmentImage({
   aspectRatio = '4/5',
   className = '',
   transparentBg = false,
+  priority = false,
 }: GarmentImageProps) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     setFailed(false);
-    setLoaded(false);
+    // If image is already cached or completed synchronously by the browser
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      setLoaded(true);
+    } else {
+      setLoaded(false);
+    }
   }, [src]);
 
   const validSrc = src && src.trim().length > 0 && !failed ? src.trim() : null;
@@ -67,12 +75,16 @@ export function GarmentImage({
             />
           )}
           <img
+            ref={imgRef}
             src={validSrc}
             alt={alt}
-            loading="lazy"
-            decoding="async"
+            loading={priority ? 'eager' : 'lazy'}
+            decoding={priority ? 'sync' : 'async'}
             onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
+            onError={() => {
+              setFailed(true);
+              setLoaded(false);
+            }}
             style={{
               width: '100%',
               height: '100%',
@@ -98,39 +110,58 @@ export function GarmentImage({
             textAlign: 'center',
           }}
         >
-          <svg
-            width="64"
-            height="64"
-            viewBox="0 0 80 80"
-            fill="none"
-            aria-hidden="true"
+          {isHoodieOrJacket ? (
+            <svg
+              width="54"
+              height="54"
+              viewBox="0 0 64 64"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M20 16 C20 8, 44 8, 44 16 L54 26 L46 32 L40 24 L40 56 L24 56 L24 24 L18 32 L10 26 Z"
+                fill={accentFill}
+                fillOpacity="0.14"
+              />
+              <path d="M32 20 L32 56" />
+              <path d="M26 38 C28 41, 36 41, 38 38" />
+            </svg>
+          ) : (
+            <svg
+              width="54"
+              height="54"
+              viewBox="0 0 64 64"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M22 14 L27 20 C29 22, 35 22, 37 20 L42 14 L56 20 L50 32 L44 26 L44 56 L20 56 L20 26 L14 32 L8 20 Z"
+                fill={accentFill}
+                fillOpacity="0.14"
+              />
+            </svg>
+          )}
+          <span
+            style={{
+              fontSize: '0.74rem',
+              fontWeight: 600,
+              letterSpacing: '0.02em',
+              textTransform: 'uppercase',
+              color: 'var(--text-muted, #64748b)',
+            }}
           >
-            {isHoodieOrJacket ? (
-              <path
-                d="M28 16L20 22L10 38L18 44L24 34V64H56V34L62 44L70 38L60 22L52 16C49 21 45 23 40 23C35 23 31 21 28 16Z"
-                fill={accentFill}
-                fillOpacity="0.18"
-                stroke={accentFill}
-                strokeWidth="3"
-                strokeLinejoin="round"
-              />
-            ) : (
-              <path
-                d="M27 18L12 29L18 40L26 35V63H54V35L62 40L68 29L53 18C50 22.5 45.5 25 40 25C34.5 25 30 22.5 27 18Z"
-                fill={accentFill}
-                fillOpacity="0.18"
-                stroke={accentFill}
-                strokeWidth="3"
-                strokeLinejoin="round"
-              />
-            )}
-          </svg>
-          <span style={{ fontSize: '0.74rem', fontWeight: 500 }}>
-            Preview unavailable
+            {categoryName || 'Garment'}
           </span>
         </div>
       )}
     </div>
   );
 }
-

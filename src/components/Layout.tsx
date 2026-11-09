@@ -63,7 +63,7 @@ export function Layout() {
   return (
     <div className="app-shell">
       <a href="#main-workspace" className="skip-link">
-        Skip to main workspace
+        {language === 'ar' ? 'تخطي إلى مساحة العمل الرئيسية' : 'Skip to main workspace'}
       </a>
 
       <div
@@ -179,12 +179,15 @@ export function Layout() {
         <div className="sidebar-promo-card">
           <div className="sidebar-promo-badge">
             <Sparkles size={13} aria-hidden="true" />
-            <span>AI Fit &amp; Mirror</span>
+            <span>{language === 'ar' ? 'المرآة الذكية والقياس' : 'AI Fit & Mirror'}</span>
           </div>
-          <div className="sidebar-promo-title">Smart Size &amp; Live Try-On</div>
+          <div className="sidebar-promo-title">
+            {language === 'ar' ? 'قياس ذكي وتجربة فورية' : 'Smart Size & Live Try-On'}
+          </div>
           <p className="sidebar-promo-desc">
-            Try garments live over WebRTC, swipe variants hands-free, and scan
-            your recommended top size with your camera.
+            {language === 'ar'
+              ? 'جرّب الملابس مباشرة عبر المرآة الذكية، بدّل الألوان بإيماءات اليد، واعرف مقاسك الأنسب بالكاميرا.'
+              : 'Try garments live over WebRTC, swipe variants hands-free, and scan your recommended top size with your camera.'}
           </p>
         </div>
       </aside>
@@ -211,8 +214,8 @@ export function Layout() {
               <input
                 type="search"
                 className="header-search-input"
-                placeholder="Search clothing items by name or description..."
-                aria-label="Search clothing catalog"
+                placeholder={t('searchPlaceholder')}
+                aria-label={t('searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
               />

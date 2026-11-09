@@ -80,6 +80,27 @@
   box-shadow: 0 14px 28px -5px rgba(124, 58, 237, 0.5), 0 10px 12px -6px rgba(124, 58, 237, 0.3);
 }
 
+@media (max-width: 768px) {
+  .assistant-fab {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    right: 16px;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  [dir="rtl"] .assistant-fab {
+    right: auto;
+    left: 16px;
+  }
+
+  .assistant-fab span {
+    display: none;
+  }
+}
+
 .assistant-drawer-layer {
   position: fixed;
   inset: 0;
@@ -1712,3 +1733,4 @@
   line-height: 1.5;
   margin: 0;
 }
+
