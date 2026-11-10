@@ -54,3 +54,4 @@
    Store confirmed orders in tab-scoped `sessionStorage` so refreshing `/orders/:orderNumber` preserves the `X-Receipt-Token` authorization header.
 3. **Notify Backend Team Regarding Real SMS Provider**:
    The loyalty program operates in demo mode (`"Demo mode: no SMS is sent. Enter the code 123456."`). Upstream configuration of an SMS provider (e.g. Twilio, Infobip) is required before advertising real SMS verification to public customers.
+

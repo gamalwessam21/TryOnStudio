@@ -178,3 +178,4 @@ This comprehensive audit evaluated the actual source code of the **TryOnStudio**
 - **Correction:**
   1. Pass `currentOrder?.receiptAccessToken` when invoking `commerceApi.getOrder(resolvedNum, token)`.
   2. Persist confirmed orders to `sessionStorage` (scoped to current tab session) so that page reloads maintain receipt authorization.
+
