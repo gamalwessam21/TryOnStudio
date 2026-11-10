@@ -78,18 +78,45 @@ export function ReceiptPage() {
                 recordConfirmedOrder(currentOrder);
               }
               setVerifiedStripe(true);
+
+              // Notify authoritative backend to confirm Stripe payment and update order
+              try {
+                const confirmedRemote = await commerceApi.confirmOrderStripeSession(
+                  resolvedNum,
+                  sessionId
+                );
+                if (confirmedRemote && active) {
+                  currentOrder = {
+                    ...confirmedRemote,
+                    receiptAccessToken:
+                      confirmedRemote.receiptAccessToken ||
+                      currentOrder?.receiptAccessToken ||
+                      null,
+                  };
+                  setOrder(currentOrder);
+                  recordConfirmedOrder(currentOrder);
+                }
+              } catch (confirmErr) {
+                console.error('[receipt] Backend Stripe payment confirmation error:', confirmErr);
+              }
             }
           } catch (err) {
             console.error('[receipt] Stripe session verification error:', err);
           }
         }
 
-        // Attempt fetching authoritative order from backend
+        // Attempt fetching authoritative order from backend using receipt token if available
         try {
-          const remoteOrder = await commerceApi.getOrder(resolvedNum);
+          const receiptToken = currentOrder?.receiptAccessToken ?? null;
+          const remoteOrder = await commerceApi.getOrder(resolvedNum, receiptToken);
           if (active) {
-            setOrder(remoteOrder);
-            recordConfirmedOrder(remoteOrder);
+            const mergedOrder: PersistedOrder = {
+              ...remoteOrder,
+              receiptAccessToken:
+                remoteOrder.receiptAccessToken || receiptToken,
+            };
+            setOrder(mergedOrder);
+            recordConfirmedOrder(mergedOrder);
             return;
           }
         } catch {

@@ -81,6 +81,18 @@ export interface CommerceContextValue {
   clearAssistantChat: () => void;
 }
 
+const CONFIRMED_ORDERS_SESSION_KEY = 'tryonstudio_session_orders';
+
+function loadSessionOrders(): Record<string, PersistedOrder> {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return {};
+    const raw = window.sessionStorage.getItem(CONFIRMED_ORDERS_SESSION_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, PersistedOrder>) : {};
+  } catch {
+    return {};
+  }
+}
+
 const CommerceContext = createContext<CommerceContextValue | null>(null);
 
 export function CommerceProvider({ children }: { children: ReactNode }) {
@@ -115,7 +127,7 @@ export function CommerceProvider({ children }: { children: ReactNode }) {
   );
   const [recentConfirmedOrders, setRecentConfirmedOrders] = useState<
     Record<string, PersistedOrder>
-  >({});
+  >(() => loadSessionOrders());
 
   // Verified Loyalty session (strictly in-memory; never faked in localStorage)
   const [loyaltyVerificationToken, setLoyaltyVerificationToken] = useState<
@@ -251,10 +263,29 @@ export function CommerceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const recordConfirmedOrder = useCallback((order: PersistedOrder) => {
-    setRecentConfirmedOrders((prev) => ({
-      ...prev,
-      [order.orderNumber]: order,
-    }));
+    setRecentConfirmedOrders((prev) => {
+      const existing = prev[order.orderNumber];
+      const merged: PersistedOrder = {
+        ...order,
+        receiptAccessToken:
+          order.receiptAccessToken || existing?.receiptAccessToken || null,
+      };
+      const next = {
+        ...prev,
+        [order.orderNumber]: merged,
+      };
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          window.sessionStorage.setItem(
+            CONFIRMED_ORDERS_SESSION_KEY,
+            JSON.stringify(next)
+          );
+        }
+      } catch {
+        // Storage access may be restricted in private browsing
+      }
+      return next;
+    });
     if (typeof order.updatedLoyaltyBalance === 'number') {
       setLoyaltyAccount((prev) =>
         prev
