@@ -1,219 +1,222 @@
 # Try On Studio
 
-> **Production Deployment:** [https://try-on-studio-beta.vercel.app](https://try-on-studio-beta.vercel.app)  
-> **GitHub Repository:** [https://github.com/gamalwessam21/TryOnStudio](https://github.com/gamalwessam21/TryOnStudio)  
-> **Authoritative Backend API:** `https://clothesai3d.runasp.net`  
-> **Backend OpenAPI / Swagger UI:** `https://clothesai3d.runasp.net/swagger`  
-> **Swagger JSON Specification:** `https://clothesai3d.runasp.net/swagger/v1/swagger.json`  
-> **Primary Git Branches:** `main` (Production) & `dev` (Active Integration)
+A next-generation virtual fitting room and fashion e-commerce progressive web application. **Try On Studio** pairs real-time camera-based clothing visualization powered by Decart AI with AI-assisted body size scanning, intelligent conversational styling powered by Google Gemini on the backend, and an integrated e-commerce checkout supporting Cash on Delivery, Stripe Sandbox payments, and a verified customer loyalty rewards ledger.
 
 ---
 
 ## Table of Contents
 
-1. [Project Overview](#1-project-overview)
-2. [Actual Technology Stack](#2-actual-technology-stack)
-3. [Verified Project Structure](#3-verified-project-structure)
-4. [Application Architecture & Data Flow](#4-application-architecture--data-flow)
-5. [Features & User Journeys](#5-features--user-journeys)
-   - [5.1 Product Discovery & 360° Rotational Rack](#51-product-discovery--360-rotational-rack)
-   - [5.2 Realtime Virtual Try-On (Decart WebRTC)](#52-realtime-virtual-try-on-decart-webrtc)
-   - [5.3 MediaPipe Hand-Swipe Gesture Navigation](#53-mediapipe-hand-swipe-gesture-navigation)
-   - [5.4 AI Fashion Stylist (Backend Gemini Integration)](#54-ai-fashion-stylist-backend-gemini-integration)
-   - [5.5 AI Camera Body Size Scan & Fit Estimation](#55-ai-camera-body-size-scan--fit-estimation)
-   - [5.6 Single-Product Checkout & Idempotency](#56-single-product-checkout--idempotency)
-   - [5.7 Stripe Payments & Backend Payment Verification](#57-stripe-payments--backend-payment-verification)
-   - [5.8 Customer Loyalty Rewards & Verification Behavior](#58-customer-loyalty-rewards--verification-behavior)
-   - [5.9 Digital Receipts & Tokenized Session Persistence](#59-digital-receipts--tokenized-session-persistence)
-   - [5.10 Bi-Directional Arabic (RTL) & English (LTR) Localization](#510-bi-directional-arabic-rtl--english-ltr-localization)
-   - [5.11 Responsive Mobile & Desktop Layouts](#511-responsive-mobile--desktop-layouts)
-6. [Complete Backend Swagger API Reference](#6-complete-backend-swagger-api-reference)
-   - [6.1 Standard Error Response Structure](#61-standard-error-response-structure)
-   - [6.2 Health & Media Endpoints](#62-health--media-endpoints)
-   - [6.3 Catalog & Categories Endpoints](#63-catalog--categories-endpoints)
-   - [6.4 Sizing & Camera Body Scan Endpoints](#64-sizing--camera-body-scan-endpoints)
-   - [6.5 Virtual Try-On Token Endpoint](#65-virtual-try-on-token-endpoint)
-   - [6.6 AI Fashion Assistant Endpoints](#66-ai-fashion-assistant-endpoints)
-   - [6.7 Orders & Payment Verification Endpoints](#67-orders--payment-verification-endpoints)
-   - [6.8 Customer Loyalty Program Endpoints](#68-customer-loyalty-program-endpoints)
-   - [6.9 Frontend Serverless Helper Routes (Non-Swagger)](#69-frontend-serverless-helper-routes-non-swagger)
-7. [Order, Stripe, Receipt & Loyalty Workflows](#7-order-stripe-receipt--loyalty-workflows)
-8. [Environment Variables & Local Setup](#8-environment-variables--local-setup)
-9. [Security, Authorization & Reliability](#9-security-authorization--reliability)
-10. [Testing & Quality Assurance](#10-testing--quality-assurance)
-11. [Deployment Architecture](#11-deployment-architecture)
-12. [Developer Contribution Guide & Git Workflow](#12-developer-contribution-guide--git-workflow)
-13. [Audit Documentation Index](#13-audit-documentation-index)
+- [1. Project Overview](#1-project-overview)
+  - [What is Try On Studio?](#what-is-try-on-studio)
+  - [Target Users](#target-users)
+  - [Verified Operational Capabilities vs. External Dependencies](#verified-operational-capabilities-vs-external-dependencies)
+- [2. Actual Technology Stack](#2-actual-technology-stack)
+- [3. Verified Project Structure](#3-verified-project-structure)
+- [4. Application Architecture & Data Flow](#4-application-architecture--data-flow)
+  - [4.1 System Architecture](#41-system-architecture)
+  - [4.2 Application Bootstrap & Provider Hierarchy](#42-application-bootstrap--provider-hierarchy)
+- [5. Features & User Journeys](#5-features--user-journeys)
+  - [5.1 Product Discovery & 360° Rotational Rack](#51-product-discovery--360-rotational-rack)
+  - [5.2 Realtime Virtual Try-On (Decart WebRTC)](#52-realtime-virtual-try-on-decart-webrtc)
+  - [5.3 MediaPipe Hand-Swipe Gesture Navigation](#53-mediapipe-hand-swipe-gesture-navigation)
+  - [5.4 AI Fashion Stylist (Native Backend Integration)](#54-ai-fashion-stylist-native-backend-integration)
+  - [5.5 AI Camera Body Size Scan & Fit Estimation](#55-ai-camera-body-size-scan--fit-estimation)
+  - [5.6 Single-Product Checkout & Idempotency](#56-single-product-checkout--idempotency)
+  - [5.7 Stripe Payments & Backend Payment Verification](#57-stripe-payments--backend-payment-verification)
+  - [5.8 Customer Loyalty Rewards & Verification Behavior](#58-customer-loyalty-rewards--verification-behavior)
+  - [5.9 Digital Receipts & Tokenized Persistence](#59-digital-receipts--tokenized-persistence)
+  - [5.10 Bi-Directional Arabic (RTL) & English (LTR) Localization](#510-bi-directional-arabic-rtl--english-ltr-localization)
+  - [5.11 Responsive Mobile & Desktop Layouts](#511-responsive-mobile--desktop-layouts)
+- [6. Authoritative Backend Contract & Swagger API Reference](#6-authoritative-backend-contract--swagger-api-reference)
+  - [6.1 Source of Truth & Critical Route Corrections](#61-source-of-truth--critical-route-corrections)
+  - [6.2 Standard Error Response Structure & HTTP Status Codes](#62-standard-error-response-structure--http-status-codes)
+  - [6.3 Authoritative Rate Limits](#63-authoritative-rate-limits)
+  - [6.4 Health & Media Endpoints](#64-health--media-endpoints)
+  - [6.5 Catalog & Categories Endpoints](#65-catalog--categories-endpoints)
+  - [6.6 Sizing & Camera Body Scan Endpoints](#66-sizing--camera-body-scan-endpoints)
+  - [6.7 Virtual Try-On Token Endpoint](#67-virtual-try-on-token-endpoint)
+  - [6.8 AI Fashion Assistant Endpoints](#68-ai-fashion-assistant-endpoints)
+  - [6.9 Orders & Payment Verification Endpoints](#69-orders--payment-verification-endpoints)
+  - [6.10 Customer Loyalty Program Endpoints](#610-customer-loyalty-program-endpoints)
+  - [6.11 Frontend Serverless Helper Routes (Non-Swagger)](#611-frontend-serverless-helper-routes-non-swagger)
+- [7. Order, Stripe, Receipt & Loyalty Workflows](#7-order-stripe-receipt--loyalty-workflows)
+  - [7.1 Single-Product Order Creation & Price Validation](#71-single-product-order-creation--price-validation)
+  - [7.2 Stripe Hosted Checkout & Backend Synchronization](#72-stripe-hosted-checkout--backend-synchronization)
+  - [7.3 Digital Receipt & `X-Receipt-Token` Authorization](#73-digital-receipt--x-receipt-token-authorization)
+  - [7.4 Loyalty Verification & Redemption Rules](#74-loyalty-verification--redemption-rules)
+- [8. Environment Variables & Local Setup](#8-environment-variables--local-setup)
+- [9. Testing & Verification Status](#9-testing--verification-status)
+  - [9.1 Verification Hierarchy & Test Categorization](#91-verification-hierarchy--test-categorization)
+  - [9.2 Verified Automated Test Results](#92-verified-automated-test-results)
+  - [9.3 17-Step Full User Journey Integration Checklist](#93-17-step-full-user-journey-integration-checklist)
+- [10. Developer Contribution Guide & Git Workflow](#10-developer-contribution-guide--git-workflow)
+- [11. Team Assignments](#11-team-assignments)
+  - [Person 1 — Clothing Catalog & Product Browsing](#person-1--clothing-catalog--product-browsing)
+  - [Person 2 — Interactive Studio, Virtual Try-On & Size Detection](#person-2--interactive-studio-virtual-try-on--size-detection)
+  - [Person 3 — Cart & Shopping Selection Management](#person-3--cart--shopping-selection-management)
+  - [Person 4 — Loyalty Program & Points Management](#person-4--loyalty-program--points-management)
+  - [Person 5 — Checkout, Orders, Payments & Digital Receipts](#person-5--checkout-orders-payments--digital-receipts)
+  - [Shared Team Integration Rules](#shared-team-integration-rules)
+- [12. Documentation Index](#12-documentation-index)
 
 ---
 
 ## 1. Project Overview
 
 ### What is Try On Studio?
-**Try On Studio** is an AI-powered virtual dressing room and interactive fashion e-commerce web application. It bridges the gap between digital browsing and physical garment trial by allowing shoppers to:
-- Browse live fashion catalogs organized into categories and view multi-color variants.
-- Spin garments through a physical **360° interactive rack** with 24-frame multi-angle image sequences.
-- Step into an interactive **WebRTC live video mirror** powered by Decart AI (`lucy-vton-latest`) to drape clothing onto their live camera feed in real time.
-- Switch garments and color variants hands-free using **MediaPipe Pose hand-swipe gesture navigation**.
-- Measure and estimate recommended top sizes with high precision via a guided **camera body scan** that uploads 20 high-resolution video frames to the backend.
-- Consult an embedded **AI Fashion Assistant** powered by Google Gemini on the backend (`gemini-3.5-flash`), grounded with live catalog inventory, personal undertone analysis, and body proportion guidance.
-- Complete purchases seamlessly through **Cash on Delivery (COD)** or **Stripe Hosted Checkout**, redeem verified **Loyalty Points**, and inspect downloadable/printable **Digital Receipts**.
-- Toggle between full **English (LTR)** and natural **Arabic (RTL)** localization with zero UI layout breakage.
+Try On Studio bridges the physical fitting room experience and modern digital commerce. E-commerce shoppers frequently abandon carts or return apparel due to sizing uncertainty, color mismatch, and lack of styling advice. Try On Studio resolves these pain points by enabling customers to:
+
+- Browse a curated catalog of apparel categorized into T-Shirts, Polo Shirts, Hoodies, and Jackets.
+- Inspect garments using an interactive **360° rotational rack** that preloads approximately 24 ordered frames captured around each garment (ordered back to front).
+- Step in front of their webcam to experience **real-time AI garment try-on** powered by Decart AI (`lucy-vton-latest`) over WebRTC.
+- Switch garment variants hands-free while in front of the camera using **MediaPipe hand-swipe gestures**.
+- Scan their physical body proportions via computer vision camera frame capture to receive **authoritative size recommendations** (`S`, `M`, `L`, `XL`, etc.) with borderline range warnings directly from the backend.
+- Consult an embedded **AI Fashion Assistant** powered natively by the backend, dynamically discovering model capabilities and grounded with live catalog inventory, personal undertone analysis, and body proportion guidance.
+- Complete single-item purchases with transparent dual-currency pricing (USD and EGP at 50 EGP/USD), supporting **Cash on Delivery** and **Stripe Sandbox**.
+- Earn and redeem **customer loyalty points** backed by secure OTP verification and an authoritative backend ledger.
 
 ### Target Users
-- **Online Fashion Shoppers:** Customers who want to preview garment fit, drape, and colorways on their own body before purchasing.
-- **Sizing-Conscious Buyers:** Shoppers uncertain about brand-specific sizing who need an instant, camera-based measurement check.
-- **Bilingual Audiences:** Full bilingual accessibility for English and Arabic speakers with native Right-to-Left (RTL) support and price isolation.
+- **Shoppers:** Individuals seeking accurate sizing, realistic visual previews, and tailored styling advice before ordering.
+- **Retailers & Brands:** Fashion merchandisers looking to decrease e-commerce return rates and increase purchase conversion through high-fidelity visual try-on.
+- **Developers & Integrators:** Engineers integrating headless commerce, WebRTC media streams, and computer-vision microservices into a unified web application.
 
 ### Verified Operational Capabilities vs. External Dependencies
 
-| Capability | Operational Status | Technical Implementation |
-| :--- | :---: | :--- |
-| **Catalog & 360° Rack** | **Verified Live** | 100% dynamic; loads 15 garments, 4 categories, and 24-frame multi-angle rotational series from the authoritative backend. |
-| **Virtual Try-On** | **Verified Live** | Requests short-lived Decart tokens (`POST /api/tryon/token`) and streams video over WebRTC via `@decartai/sdk` (`lucy-vton-latest`). |
-| **Gesture Navigation** | **Verified Live** | Runs local `@mediapipe/tasks-vision` pose estimation in WebAssembly on the client CPU/GPU to detect horizontal wrist swipes. |
-| **AI Stylist (Gemini)** | **Verified Live** | Natively handled by the backend (`https://clothesai3d.runasp.net/api/assistant/chat`) using `gemini-3.5-flash`; grounded with live items. |
-| **AI Body Size Scan** | **Verified Live** | Captures 20 canvas frames over 3 seconds with dynamic JPEG compression ($\le 2\text{ MB/frame}$, $\le 20\text{ MB total}$) to `/api/fashion-items/{id}/size-scan`. |
-| **Single-Product Checkout** | **Verified Live** | Submits single-item orders with RFC4122 v4 `Idempotency-Key` headers for Cash on Delivery (COD) and card payments. |
-| **Stripe Payments** | **Verified Live** | Creates Stripe sessions; verifies payment with Stripe; synchronizes status to backend via `POST /api/orders/{orderNumber}/verify-payment`. |
-| **Loyalty Program** | **Demo Mode** | Authoritative points ledger verified (`GET /api/loyalty/rules`). The backend OTP challenge operates in **Demo Mode** with test code `123456` (real SMS delivery requires upstream telecom configuration). |
-| **Digital Receipts** | **Verified Live** | Renders order breakdown; requires `X-Receipt-Token`; preserves token across page reloads via tab-scoped `sessionStorage`. |
-| **Localization** | **Verified Live** | 280 English and 280 Arabic dictionary keys with 1:1 parity and `<bdi>` tag protection for prices and product names. |
+| Capability | Local Frontend Engine | Backend API (`clothesai3d.runasp.net`) | External Provider / Status |
+| :--- | :--- | :--- | :--- |
+| **Catalog & Products** | In-memory cache & React state | Authoritative SQL DB & Media CDN | Fully operational (15 products, 4 categories, 425 media assets) |
+| **360° Clothing Rack** | Canvas frame rotation & gesture drag | Ordered ~24-frame WebP sequence (`/api/fashion-items/rack?take=6`) | Fully operational (frames ordered back to front) |
+| **Realtime Try-On** | WebRTC video player & camera stream | Token proxy (`POST /api/tryon/token`) | Decart AI WebRTC service (`lucy-vton-latest`). Ephemeral tokens (~2 min; never persisted) |
+| **Hand-Swipe Gesture** | In-browser MediaPipe Pose Landmarker | None (client-side edge compute) | Runs locally at 30–60 FPS with zero network overhead |
+| **Camera Size Scan** | 20-frame camera capture (3 sec) | `POST /api/fashion-items/{id}/size-scan` | Upstream AI service proxy. Returns size + borderline range |
+| **AI Stylist Chat** | Slide-out panel & product cards | `GET/POST /api/assistant/chat` | Native backend proxy to Google Gemini. 55s timeout, rate-limited at 18 req/min |
+| **Order Placement** | Draft preparation & checkout form | `POST /api/orders` | ASP.NET Core DB. Authoritative server pricing, single-item orders only |
+| **Stripe Checkout** | Client redirect & return handler | `POST /api/orders/{id}/verify-payment` | Vercel helper `api/payments/stripe.ts` creates session; backend confirms payment |
+| **Loyalty Ledger** | In-memory verified token state | `POST /api/loyalty/verify-*`, `GET /account` | Demo mode: fixed OTP `123456`, in-memory token (never persisted), no SMS gateway |
+| **Digital Receipt** | Receipt view & print handler | `GET /api/orders/{orderNumber}` | Requires `X-Receipt-Token`. Token stored in `localStorage['tys.receiptTokens']` |
 
 ---
 
 ## 2. Actual Technology Stack
 
-Every package and library documented below is verified against `package.json` and production imports:
+```mermaid
+flowchart TD
+    Client["Client Browser (React 19 + Vite 6 + TypeScript)"]
+    NET["ASP.NET Core (.NET 8) Backend (clothesai3d.runasp.net)"]
+    VercelEdge["Vercel Serverless Function (/api/payments/stripe)"]
+    Decart["Decart WebRTC Live AI (lucy-vton-latest)"]
+    MediaPipe["MediaPipe Pose Landmarker (WASM, Browser-Local)"]
+    Gemini["Google Gemini (Proxied via Backend Assistant API)"]
+    Stripe["Stripe Checkout (Sandbox API)"]
 
-### Frontend Core & Build Tooling
-- **React (`^19.1.0`)**: Modern declarative UI framework utilizing React 19 functional components and hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, `useRef`, `useContext`).
-- **React DOM (`^19.1.0`)**: Client-side DOM rendering engine.
-- **TypeScript (`~5.8.3`)**: Statically typed JavaScript targeting ES2022 under strict compiler flags (`tsconfig.app.json`).
-- **Vite (`^6.3.5`)**: High-performance bundler with Hot Module Replacement (HMR) and Rollup production optimizations.
-- **@vitejs/plugin-react (`^4.4.1`)**: Fast React Babel/SWC transform plugin.
+    Client -->|"HTTP API (Catalog, Orders, Loyalty, Sizing)"| NET
+    Client -->|"WebRTC Video Streaming"| Decart
+    Client -->|"Local Pose Tracking (Gestures)"| MediaPipe
+    Client -->|"Create Checkout Session"| VercelEdge
+    VercelEdge -->|"Stripe API"| Stripe
+    NET -->|"Payment Verification"| Stripe
+    NET -->|"Chat Inference"| Gemini
+    NET -->|"Size Scan Frames"| NET
+```
 
-### Routing & Navigation
-- **React Router DOM (`^7.6.0`)**: Declarative client-side routing featuring nested layouts (`<Layout />`), URL parameter matching (`/orders/:orderNumber`), search params (`useSearchParams`), and programmatic navigation (`useNavigate`).
+Verified directly against [package.json](file:///c:/Users/Gamal%202003/TryOnStudio/package.json) and project source files:
 
-### Computer Vision, Realtime AI & Gestures
-- **@decartai/sdk (`^0.2.14`)**: Official Decart AI SDK establishing encrypted WebRTC peer connections with Decart's `lucy-vton-latest` generative model.
-- **@mediapipe/tasks-vision (`1.2.0`)**: Google MediaPipe WebAssembly vision engine for client-side skeletal tracking (`PoseLandmarker`) using `pose_landmarker_lite.task` from Google Storage CDN.
-- **Google Gemini API (`gemini-3.5-flash`)**: Multimodal LLM natively configured on the backend server for styling advice and product recommendations.
-
-### Styling & Design System
-- **Pure CSS3 with Custom Properties**: Modular CSS architecture without utility-class runtime bloat:
-  - `src/styles/tokens.css`: Dark luxury palette (`--bg-primary: #0a0b0e`, `--accent-gold: #c6a75a`), spacing, and elevations.
-  - `src/styles/global.css`: Reset stylesheets, responsive typography, and accessibility focus outlines.
-  - `src/styles/studio.css`: Camera mirror viewfinder, 360° rotational rack, variant swatches, and size scan UI.
-  - `src/styles/commerce.css`: Checkout forms, loyalty rewards ledger, digital receipts, and AI assistant drawer.
-
-### Icons & Presentation
-- **lucide-react (`^1.65.0`)**: Tree-shakeable SVG iconography for shopping bags, cameras, sparkles, rulers, and badges.
-
-### Testing & Code Quality
-- **Vitest (`^3.2.7` / `^3.1.3`)**: Vite-native test runner for unit and contract testing.
-- **jsdom (`^26.1.0`)**: Headless DOM environment for React hook and component testing.
-- **ESLint (`^9.25.0`)**: Code linter configured for React Hooks and TypeScript rules.
-
-### Backend Infrastructure
-- **ASP.NET Core Backend**: Hosted at `https://clothesai3d.runasp.net` (database, media CDN, AI size scanning, Gemini assistant, order persistence, and loyalty ledger).
-- **Vercel Serverless Function Helper**: Hosted on `/api/payments/stripe` to initiate Stripe Hosted Checkout sessions with server-side secrets.
+- **Frontend Core:** React 19 (`^19.1.0`), React DOM (`^19.1.0`), TypeScript (`~5.8.3`), Vite (`^6.3.5`).
+- **Routing:** React Router DOM (`^7.6.0`) using HTML5 history routing via `BrowserRouter`.
+- **Computer Vision & AI:** `@mediapipe/tasks-vision` (`1.2.0`) with WebAssembly runtime; `@decartai/sdk` (`^0.2.14`) for WebRTC virtual try-on.
+- **Icons & Presentation:** Lucide React (`^1.65.0`).
+- **Styling & Design System:** Pure Vanilla CSS Design System (`tokens.css`, `global.css`, `studio.css`, `commerce.css`). Fully responsive, zero heavy external utility frameworks.
+- **Testing & Code Quality:** Vitest (`^3.1.3`), ESLint (`^9.25.0`), TypeScript compiler check (`tsc -b --noEmit`).
+- **Backend Infrastructure:** ASP.NET Core (.NET 8) hosted on `https://clothesai3d.runasp.net` with IIS reverse proxy.
 
 ---
 
 ## 3. Verified Project Structure
 
-The project structure is organized by domain features and clean separation of concerns:
-
-```
+```text
 TryOnStudio/
-├── api/                                # Vercel Serverless Edge/Node Functions
+├── .github/
+│   └── workflows/
+│       └── ci.yml                          # Automated CI: Typecheck, Lint, Test, Build
+├── api/                                    # Vercel Serverless Gateway Functions
 │   ├── assistant/
-│   │   └── chat.ts                     # Optional edge proxy (assistant is natively on backend)
+│   │   └── chat.ts                         # Legacy Vercel assistant fallback (pending deprecation)
 │   └── payments/
-│       └── stripe.ts                   # Stripe Hosted Checkout creation helper
-├── docs/                               # Integration Audit Deliverables & Specifications
-│   ├── API_INTEGRATION_MATRIX.md       # Complete mapping of 21 backend and edge endpoints
-│   ├── FRONTEND_INTEGRATION_AUDIT.md   # Feature-by-feature technical audit & vulnerability report
-│   └── PRODUCTION_READINESS_CHECKLIST.md # Quality gates, user journey test results & checklist
-├── public/                             # Public Static Assets
-│   └── favicon.svg                     # Application brand icon
-├── reference/                          # Technical Specifications & UI Design References
-│   ├── BACKEND_COMMERCE_SPEC.md        # Authoritative backend contract specifications
-│   ├── FRONTEND_GUIDE.md               # Original integration handoff guide
-│   ├── FRONTEND_MESSAGE.md             # Functional expectations for virtual try-on
-│   └── FRONTEND_MESSAGE_SIZE_SCAN.md   # Functional expectations for AI size scanning
-├── src/                                # Frontend Source Code
-│   ├── __tests__/                      # Automated Vitest Test Suites
-│   │   ├── commerce.test.ts            # Unit tests for pricing, validation, and loyalty math
-│   │   ├── liveBackend.test.ts         # Contract tests verifying live ASP.NET backend schemas
-│   │   └── tryOnStudio.test.ts         # Frame validation, error formatter, and gesture tests
-│   ├── app/                            # Root Application Shell, Context Providers & Pages
-│   │   ├── pages/                      # Top-Level Page Views
-│   │   │   ├── BrowsePage.tsx          # Full catalog browsing, category filtering, search
-│   │   │   ├── CheckoutPage.tsx        # Customer order creation, shipping, loyalty, payment
-│   │   │   ├── FashionAssistantPage.tsx# Standalone AI Stylist chat view
-│   │   │   ├── HowItWorksPage.tsx      # Step-by-step visual interactive guide
-│   │   │   ├── LoyaltyPage.tsx         # OTP verification, points ledger, tier rewards
-│   │   │   ├── ReceiptPage.tsx         # Digital receipt, Stripe confirmation, printable view
-│   │   │   ├── SizeGuidePage.tsx       # Standard size charts & body scan launchpad
-│   │   │   └── StudioPage.tsx          # Main dressing room (Live Mirror, 360 Rack, Variants)
-│   │   ├── App.tsx                     # Router definitions, providers wrapper, route table
-│   │   ├── CommerceContext.tsx         # Commerce, Checkout, Stripe, Loyalty & Assistant state
-│   │   └── StudioContext.tsx           # Catalog, Categories, Selected Garment, 360 Rack state
-│   ├── components/                     # Shared UI Components
-│   │   ├── GarmentImage.tsx            # Resilient image component with SVG fallback
-│   │   └── Layout.tsx                  # App shell (Sidebar, Header, Search, Mobile Drawer)
-│   ├── features/                       # Domain-Specific Interactive Subsystems
-│   │   ├── assistant/                  # AI Fashion Stylist Interface
-│   │   │   ├── AssistantFloatingDrawer.tsx # Sliding bottom-right chat drawer
-│   │   │   └── FashionAssistantPanel.tsx   # Reusable chat message list & prompt input
-│   │   ├── catalog/                    # Garment Display & Selection
-│   │   │   ├── ClothingRack360.tsx     # 24-frame interactive rotational rack viewer
-│   │   │   ├── GarmentSelectorPanel.tsx# Category tabs, search results, item cards
-│   │   │   └── SelectedOutfitCard.tsx  # Selected garment meta, color swatches, buy button
-│   │   ├── size-scan/                  # AI Body Size Measurement
-│   │   │   ├── SizeResultCard.tsx      # Recommended size, confidence, and fit notes
-│   │   │   ├── SizeScanPanel.tsx       # Countdown overlay, guidance wireframes, progress
-│   │   │   └── useSizeScan.ts          # State machine managing capture & API submission
-│   │   └── tryon/                      # Realtime Virtual Try-On & Computer Vision
-│   │       ├── CameraMirrorPanel.tsx   # WebRTC video viewfinder, mirror toggle, snapshot
-│   │       ├── swipeDetector.ts        # MediaPipe landmark geometry & swipe velocity math
-│   │       ├── useDecartTryOn.ts       # Decart WebRTC peer connection & token manager
-│   │       ├── useGestureNavigation.ts # MediaPipe PoseLandmarker hook & gesture dispatcher
-│   │       └── WorkflowStepsRail.tsx   # 4-stage visual progress rail (Select, Mirror, Scan, Buy)
-│   ├── hooks/                          # Reusable Platform Hooks
-│   │   └── useCamera.ts                # Camera permissions, device enumeration & stream lifecycle
-│   ├── i18n/                           # Internationalization & Localization
-│   │   └── LanguageContext.tsx         # English / Arabic state, RTL toggle, dictionary & t()
-│   ├── services/                       # Typed HTTP API Client Services
-│   │   ├── captureFrames.ts            # Canvas frame extractor & dynamic JPEG compression
-│   │   ├── commerceApi.ts              # Orders, Stripe, Loyalty & Assistant client methods
-│   │   └── fashionApi.ts               # Catalog, Sizes, TryOn token & Size Scan client methods
-│   ├── styles/                         # CSS Design System
-│   │   ├── commerce.css                # Checkout, Cart, Loyalty, Receipt & Drawer styling
-│   │   ├── global.css                  # Typography, reset, accessibility outlines, shell
-│   │   ├── studio.css                  # Studio workspace, 360 rack, camera viewfinder, swatches
-│   │   └── tokens.css                  # Color palette, spacing, elevations, font families
-│   ├── types/                          # TypeScript Type Definitions
-│   │   ├── api.ts                      # Backend catalog, variant, size & scan interfaces
-│   │   └── commerce.ts                 # Orders, checkout, Stripe, loyalty & assistant interfaces
-│   ├── utils/                          # Pure Helper Functions
-│   │   ├── commerceHelpers.ts          # Price converters (USD to EGP), phone formatting, OTP
-│   │   └── garmentHelpers.ts           # Try-on prompt builder, category mapping, image resolver
-│   ├── main.tsx                        # Application entry point (mounts React root)
-│   └── vite-env.d.ts                   # Vite environment variable typings
-├── .env.example                        # Template for required environment variables
-├── eslint.config.js                    # ESLint 9 configuration
-├── index.html                          # Single-page HTML entry point
-├── package.json                        # Dependencies, scripts, and project metadata
-├── tsconfig.api.json                   # Serverless API functions TypeScript configuration
-├── tsconfig.app.json                   # Application TypeScript configuration (strict mode)
-├── tsconfig.json                       # Root TypeScript project references configuration
-├── tsconfig.node.json                  # Vite configuration TypeScript rules
-├── vercel.json                         # Vercel deployment routing, SPA rewrites & functions
-└── vite.config.ts                      # Vite build configuration, React plugin & local API proxy
+│       └── stripe.ts                       # Stripe Checkout session creator (Sandbox)
+├── docs/                                   # Engineering & Quality Documentation
+│   ├── API_INTEGRATION_MATRIX.md           # Complete endpoint verification matrix
+│   ├── FRONTEND_INTEGRATION_AUDIT.md       # Architectural audit report
+│   └── PRODUCTION_READINESS_CHECKLIST.md   # Release readiness checklist
+├── reference/                              # Authoritative Specifications & Handoffs
+│   ├── BACKEND_COMMERCE_SPEC.md            # Authoritative backend commerce contract
+│   ├── FRONTEND_GUIDE.md                   # Try On Studio mirror implementation guide
+│   ├── FRONTEND_MESSAGE.md                 # Initial backend delivery notes
+│   └── FRONTEND_MESSAGE_SIZE_SCAN.md       # Camera size scan integration notes
+├── BACKEND_COMMERCE_SPEC.md                # Authoritative root commerce contract copy
+├── src/
+│   ├── __tests__/                          # Automated Vitest test suites
+│   │   ├── commerce.test.ts                # Cart, pricing, loyalty, and checkout unit tests
+│   │   ├── liveBackend.test.ts             # Live backend contract integration test suite
+│   │   └── tryOnStudio.test.ts             # Studio and size recommendation unit tests
+│   ├── app/                                # Application Entrypoint, Pages & Contexts
+│   │   ├── pages/
+│   │   │   ├── BrowsePage.tsx              # Catalog filtering, search, and category view
+│   │   │   ├── CheckoutPage.tsx            # Single-product checkout, COD/Stripe, points redemption
+│   │   │   ├── FashionAssistantPage.tsx    # Standalone AI Stylist chat view
+│   │   │   ├── HowItWorksPage.tsx          # Educational walkthrough of virtual try-on
+│   │   │   ├── LoyaltyPage.tsx             # OTP challenge, ledger balance, transaction history
+│   │   │   ├── ReceiptPage.tsx             # Digital receipt view, Stripe payment confirmation
+│   │   │   ├── SizeGuidePage.tsx           # Global sizing charts and fit guide
+│   │   │   └── StudioPage.tsx              # Interactive Studio, live try-on, size scanning
+│   │   ├── App.tsx                         # BrowserRouter root shell and route definitions
+│   │   ├── CommerceContext.tsx             # Commerce state (orders, loyalty, assistant, pricing)
+│   │   └── StudioContext.tsx               # Studio state (catalog, outfit selection, camera)
+│   ├── components/                         # Shared Presentation Components
+│   │   ├── GarmentImage.tsx                # Resilient image loader with CDN retry
+│   │   └── Layout.tsx                      # Global navigation header, language toggle, footer
+│   ├── features/                           # Domain Feature Modules
+│   │   ├── assistant/
+│   │   │   ├── AssistantFloatingDrawer.tsx # Slide-out AI Stylist chat drawer
+│   │   │   └── FashionAssistantPanel.tsx   # Reusable chat interface and product cards
+│   │   ├── catalog/
+│   │   │   ├── ClothingRack360.tsx         # 360° rotational garment rack
+│   │   │   ├── GarmentSelectorPanel.tsx    # Category tabs and garment grid
+│   │   │   └── SelectedOutfitCard.tsx      # Current outfit details, size selector, try-on actions
+│   │   ├── size-scan/
+│   │   │   ├── SizeResultCard.tsx          # Recommended size, alternative, borderline badge
+│   │   │   ├── SizeScanPanel.tsx           # Camera instructions, 3-2-1 countdown, scanning state
+│   │   │   └── useSizeScan.ts              # Multi-frame capture and upload hook
+│   │   └── tryon/
+│   │       ├── CameraMirrorPanel.tsx       # Webcam mirror and WebRTC video overlay
+│   │       ├── swipeDetector.ts            # Mathematical hand-swipe gesture detector
+│   │       ├── useDecartTryOn.ts           # Decart WebRTC session lifecycle hook
+│   │       ├── useGestureNavigation.ts     # MediaPipe pose tracking loop
+│   │       └── WorkflowStepsRail.tsx       # Sequential workflow progression indicators
+│   ├── hooks/
+│   │   └── useCamera.ts                    # Webcam stream acquisition and track management
+│   ├── i18n/
+│   │   └── LanguageContext.tsx             # Bilingual dictionary (English/Arabic) and RTL engine
+│   ├── services/                           # Authoritative Backend API Clients
+│   │   ├── captureFrames.ts                # Video canvas frame extractor (1280px max)
+│   │   ├── commerceApi.ts                  # Orders, loyalty, assistant, and payment client
+│   │   └── fashionApi.ts                   # Catalog, categories, rack, sizes, and scan client
+│   ├── styles/                             # Pure Vanilla CSS Design System
+│   │   ├── commerce.css                    # Checkout, receipt, loyalty, and assistant styles
+│   │   ├── global.css                      # Reset, typography, layout primitives
+│   │   ├── studio.css                      # Studio, rack, camera, and try-on styles
+│   │   └── tokens.css                      # CSS custom properties (colors, radii, elevation)
+│   ├── types/                              # Authoritative TypeScript Data Contracts
+│   │   ├── api.ts                          # Catalog, sizing, tryon, and error types
+│   │   └── commerce.ts                     # Orders, checkout, loyalty, and assistant types
+│   ├── utils/                              # Pure Helper Functions
+│   │   ├── commerceHelpers.ts              # Currency formatting, dual price display, masking
+│   │   └── garmentHelpers.ts               # Garment classification and prompt utilities
+│   ├── main.tsx                            # React application bootstrap entrypoint
+│   └── vite-env.d.ts                       # Environment variable type declarations
+├── package.json                            # Scripts and dependencies
+├── tsconfig.json                           # TypeScript compiler configuration
+├── vercel.json                             # Vercel deployment and routing rules
+└── vite.config.ts                          # Vite build and test configuration
 ```
 
 ---
@@ -223,906 +226,558 @@ TryOnStudio/
 ### 4.1 System Architecture
 
 ```mermaid
-flowchart TD
-    Client["Browser Client (React 19 SPA)"]
-    VercelEdge["Vercel Serverless Function (/api/payments/stripe)"]
-    DotNetBackend["Authoritative ASP.NET Backend (clothesai3d.runasp.net)"]
-    DecartAI["Decart AI WebRTC Mesh (lucy-vton-latest)"]
-    StripeAPI["Stripe Payments API"]
+graph TD
+    subgraph Browser ["Client Web Browser"]
+        UI["React UI Pages & Components"]
+        LangContext["LanguageContext (LTR / RTL)"]
+        StudioCtx["StudioContext (Garments, Sizes, Live Video)"]
+        CommCtx["CommerceContext (Orders, Loyalty, Stylist)"]
+        MediaPipe["MediaPipe Pose Landmarker"]
+    end
 
-    Client -->|"REST / JSON & Multipart Uploads"| DotNetBackend
-    Client -->|"Assistant Chat (/api/assistant/chat)"| DotNetBackend
-    Client -->|"Encrypted WebRTC MediaStream"| DecartAI
-    Client -->|"Create Session (/api/payments/stripe)"| VercelEdge
+    subgraph BackendGateway ["Authoritative Backend (clothesai3d.runasp.net)"]
+        HealthAPI["/api/health"]
+        CatAPI["/api/categories & /api/fashion-items"]
+        RackAPI["/api/fashion-items/rack?take=6"]
+        SizeAPI["/api/sizes & size-check & size-scan"]
+        TokenAPI["/api/tryon/token"]
+        AssistAPI["/api/assistant/chat"]
+        OrderAPI["/api/orders & verify-payment"]
+        LoyaltyAPI["/api/loyalty/rules & verify-* & account"]
+    end
 
-    VercelEdge -->|"Create Checkout Session"| StripeAPI
-    Client -->|"Verify Payment (/api/orders/{id}/verify-payment)"| DotNetBackend
+    subgraph VercelEdge ["Vercel Serverless Gateway"]
+        StripeEndpoint["/api/payments/stripe"]
+    end
+
+    subgraph External ["External Cloud Services"]
+        DecartAI["Decart AI Realtime Model (WebRTC)"]
+        GeminiAPI["Google Gemini AI"]
+        StripeCloud["Stripe Payment Gateway"]
+    end
+
+    UI --> StudioCtx
+    UI --> CommCtx
+    UI --> LangContext
+    StudioCtx --> CatAPI
+    StudioCtx --> RackAPI
+    StudioCtx --> SizeAPI
+    StudioCtx --> TokenAPI
+    TokenAPI --> DecartAI
+    StudioCtx --> MediaPipe
+    CommCtx --> AssistAPI
+    AssistAPI --> GeminiAPI
+    CommCtx --> OrderAPI
+    CommCtx --> LoyaltyAPI
+    CommCtx --> StripeEndpoint
+    StripeEndpoint --> StripeCloud
+    OrderAPI --> StripeCloud
 ```
 
 ### 4.2 Application Bootstrap & Provider Hierarchy
-When a user visits Try On Studio:
-1. `index.html` loads `/src/main.tsx`.
-2. Global style files are imported (`tokens.css`, `global.css`, `studio.css`, `commerce.css`).
-3. React 19 creates the root via `createRoot(document.getElementById('root')!)` and mounts `<App />` within `<StrictMode>`.
-4. The provider tree initializes in the following order:
-   - **`LanguageProvider`**: Detects saved language (`en` or `ar`) and updates `<html lang="..." dir="...">`.
-   - **`BrowserRouter`**: React Router 7 router instance.
-   - **`StudioProvider`**: Automatically pings `/api/health`, fetches categories, global manufactured sizes, items, and 360-rack rotation frames; syncs active item with URL query params (`?item=1`).
-   - **`CommerceProvider`**: Inquires Stripe gateway status, fetches authoritative loyalty rules (`/api/loyalty/rules`), maintains active checkout draft, manages loyalty verification tokens in memory, and initializes recent confirmed orders from tab-scoped `sessionStorage`.
-   - **`<Layout />`**: Renders persistent navigation sidebar, top header (search, language toggle, API health indicator), page `<Outlet />`, and `<AssistantFloatingDrawer />`.
+The application wraps all views inside a deterministic hierarchy of context providers in `src/app/App.tsx`:
+
+1. `LanguageProvider`: Injects active language (`'en'` | `'ar'`), text direction (`'ltr'` | `'rtl'`), and the localized dictionary.
+2. `BrowserRouter`: HTML5 history routing (`react-router-dom`).
+3. `StudioProvider`: Loads catalog items, manages current outfit selection, controls camera streams, and evaluates size availability.
+4. `CommerceProvider`: Manages checkout drafts, executes orders, handles loyalty OTP challenges, manages in-memory verification tokens, and controls the AI Stylist conversation.
+5. `Layout`: Shared navigation header, language toggle, and footer wrapping active page routes.
 
 ---
 
 ## 5. Features & User Journeys
 
 ### 5.1 Product Discovery & 360° Rotational Rack
-- **User Actions:** Browse garments by category tabs (T-Shirts, Polo Shirts, Hoodies, Jackets), search by keyword, view prices in dual currency (EGP & USD), and inspect multi-angle rotational views.
-- **Components:** `ClothingRack360.tsx`, `GarmentSelectorPanel.tsx`, `SelectedOutfitCard.tsx`, `GarmentImage.tsx`.
-- **Endpoints:** `GET /api/categories`, `GET /api/fashion-items`, `GET /api/fashion-items/rack`.
-- **Rotational Math:** `ClothingRack360.tsx` tracks horizontal mouse drag or touch swipe:
-  $$\text{frameIndex} = \left\lfloor \frac{\Delta x}{\text{containerWidth}} \times 24 \right\rfloor \pmod{24}$$
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Catalog as CatalogPage / Studio
-    participant StudioCtx as StudioContext
-    participant API as Backend (/api/fashion-items)
-
-    User->>Catalog: Opens Catalog or selects category
-    Catalog->>StudioCtx: setSelectedCategoryId(id)
-    StudioCtx->>API: GET /api/fashion-items?CategoryId=...
-    API-->>StudioCtx: Array of FashionItemDto objects
-    StudioCtx-->>Catalog: Re-renders product cards
-    User->>Catalog: Clicks on garment card
-    Catalog->>StudioCtx: selectItem(itemId)
-    StudioCtx->>API: GET /api/fashion-items/{id}
-    StudioCtx->>API: GET /api/fashion-items/{id}/variants
-    API-->>StudioCtx: Details, variants, and size array
-    StudioCtx-->>Catalog: Displays 360 Rack, swatches, and sizes
-```
+- **Browse Catalog:** Customers filter by category or search by keywords.
+- **360° Clothing Rack:** Fetches items from `GET /api/fashion-items/rack?take=6`. Each item contains approximately 24 ordered WebP rotation frames (`frames[0]` = back view, last frame = front view). Users rotate garments by dragging horizontally across the canvas.
+- **Garment Cards:** Render prices in USD and EGP (at 50 EGP/USD) with color swatches and available size pills.
 
 ### 5.2 Realtime Virtual Try-On (Decart WebRTC)
-- **User Actions:** Click **Start Camera** in the studio mirror to drape the selected garment and colorway onto their live camera feed.
-- **Components:** `CameraMirrorPanel.tsx`, `WorkflowStepsRail.tsx`.
-- **Services & Hooks:** `useDecartTryOn.ts`, `useCamera.ts`, `fashionApi.getTryOnToken()`.
-- **Decart Client Token Protocol:**
-  - `POST /api/tryon/token` on the backend returns `{ apiKey: string, expiresAt: string }` (~2 min validity).
-  - The token is temporary and must be requested before connecting or reconnecting.
-  - The token is passed via `apiKeyProvider` callback to `createDecartClient()`.
-  - Tokens are held **strictly in volatile React memory** (never in `localStorage`).
-- **WebRTC PeerConnection:**
-  - Model: `models.realtime('lucy-vton-latest')`.
-  - Prompts are generated by `buildTryOnPrompt()` with `enhance: false`.
-  - Colorway switching calls `applyGarmentToSession()` without breaking the active WebRTC stream.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant UI as CameraMirrorPanel
-    participant Hook as useDecartTryOn
-    participant Backend as Backend (/api/tryon/token)
-    participant Decart as Decart AI WebRTC Mesh
-
-    User->>UI: Clicks "Start Camera"
-    UI->>Hook: connectTryOn(cameraStream, item, variant)
-    Hook->>Backend: POST /api/tryon/token
-    Backend-->>Hook: { apiKey: "decart_tok_...", expiresAt: "..." }
-    Hook->>Decart: Connect WebRTC (model: "lucy-vton-latest", prompt, image)
-    Decart-->>Hook: WebRTC Peer Connection Established
-    Decart-->>UI: Streams Remote Virtual Try-On MediaStream
-    UI-->>User: Displays real-time draped garment on live video
-```
+- **Token Acquisition:** Ephemeral WebRTC client token requested via `POST /api/tryon/token`.
+- **Peer Connection:** Connects directly to Decart model `lucy-vton-latest` using `@decartai/sdk`.
+- **Variant Prompting:** Drapes garment using the variant's `tryOnPrompt` and high-resolution image URL.
+- **Security:** Tokens have a ~2-minute lifespan and are **never persisted**.
 
 ### 5.3 MediaPipe Hand-Swipe Gesture Navigation
-- **User Actions:** While standing 1–2 meters in front of the camera during a try-on session, users swipe their hand left or right in the air to cycle between outfit variants without touching their device.
-- **Detector:** `useGestureNavigation.ts` & `swipeDetector.ts`.
-- **WASM Asset:** `@mediapipe/tasks-vision@1.2.0` loading `pose_landmarker_lite.task`.
-- **Anti-False-Positive Rules:**
-  - Hand must be elevated above the hip landmark line ($y_{\text{wrist}} < y_{\text{hip}}$).
-  - Landmark visibility must exceed $0.50$.
-  - Horizontal movement must exceed 40% of shoulder width ($\frac{|\Delta x|}{\text{shoulderWidth}} \ge 0.40$).
-  - Directional ratio: $\frac{|\Delta x|}{|\Delta y|} \ge 1.30$.
-  - 1.5-second cooldown enforced after each triggered swipe.
+- Runs client-side MediaPipe Pose Landmarker on the camera stream via `useGestureNavigation.ts` and `swipeDetector.ts`.
+- Analyzes wrist and hip coordinates: horizontal travel of $\ge 0.85$ shoulder widths in $< 0.7$ seconds with a 1.5-second cooldown cycles to the next/previous color variant hands-free.
 
-### 5.4 AI Fashion Stylist (Backend Gemini Integration)
-- **User Actions:** Open the floating assistant drawer or visit `/assistant` to ask for styling recommendations based on skin undertones, body proportions, occasion, and budget.
-- **Endpoints:** `GET /api/assistant/chat` and `POST /api/assistant/chat` on `https://clothesai3d.runasp.net`.
-- **Architecture:** The assistant is natively configured on the ASP.NET Core backend with `gemini-3.5-flash`. No frontend Gemini API key is required.
-- **Grounding Pipeline:**
-  - Request body delivers `messages` (up to 16 turns), `language` (`en` or `ar`), and optional `context` (selected item, scanned size, style preferences, verified points).
-  - The server grounds responses against the live catalog and returns `reply`, `model`, and up to 4 `recommendedItems`.
-  - Frontend renders rich recommendation cards with links to view and try on recommended items.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Drawer as AssistantDrawer
-    participant CommCtx as CommerceContext
-    participant Backend as ASP.NET Backend (/api/assistant/chat)
-
-    User->>Drawer: Enters styling question
-    Drawer->>CommCtx: sendAssistantPrompt(text)
-    CommCtx->>Backend: POST /api/assistant/chat (messages, context, lang)
-    Backend->>Backend: Ground prompt with live catalog inventory
-    Backend->>Backend: Invoke Gemini 3.5 Flash server-side
-    Backend-->>CommCtx: { reply: string, model: string, recommendedItems: [...] }
-    CommCtx-->>Drawer: Renders assistant speech bubble + product cards
-```
+### 5.4 AI Fashion Stylist (Native Backend Integration)
+- Embedded chat drawer (`AssistantFloatingDrawer.tsx`) and full page (`FashionAssistantPage.tsx`) connected to backend `POST /api/assistant/chat`.
+- Provides personalized style advice in English or Arabic, grounded by active catalog items.
+- Displays 0–4 real catalog recommendations as interactive product cards.
+- Respects a 55-second request timeout and dynamically reads the active model from the backend.
 
 ### 5.5 AI Camera Body Size Scan & Fit Estimation
-- **User Actions:** Launch the guided body scan from the studio or size guide page. Step back 1–2m for a 3-second countdown while 20 frames are captured.
-- **Engine:** `captureFrames.ts` draws un-mirrored `<video>` frames onto an HTML5 canvas.
-- **Dynamic Compression:** Frames are downscaled to max 1280px. JPEG quality automatically steps down (0.84 → 0.70 → 0.50 → 0.35) ensuring each frame is $\le 2\text{ MB}$ and total upload $\le 20\text{ MB}$.
-- **Backend API:** `POST /api/fashion-items/{id}/size-scan` (multipart/form-data with `frames` field, accepts 8–40 images).
-- **Borderline Rule:** When `borderline` is `true`, the frontend displays `sizeRange` (e.g. `"M-L"`) instead of `size` to indicate a boundary fit.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Panel as SizeScanPanel
-    participant Hook as useSizeScan
-    participant Canvas as captureFrames.ts
-    participant Backend as Backend (/api/fashion-items/{id}/size-scan)
-
-    User->>Panel: Clicks "Start AI Size Scan"
-    Panel->>Hook: startSizeScan(itemId, videoRef)
-    Hook-->>Panel: Displays 3-second countdown & positioning overlay
-    Hook->>Canvas: captureFrames({ count: 20, durationMs: 3000, maxDimension: 1280 })
-    Canvas->>Canvas: Extracts 20 un-mirrored frames, compresses JPEG <= 2MB
-    Canvas-->>Hook: Array of 20 validated JPEG Blobs
-    Hook->>Backend: POST multipart/form-data (frames: Blob[])
-    Backend->>Backend: Compute body pose geometry & chest/shoulder metrics
-    Backend-->>Hook: { size: "M", confidence: "high", borderline: false, alternative: "L" }
-    Hook-->>Panel: Displays SizeResultCard (or sizeRange if borderline)
-    Hook->>Panel: Selects recommended size in checkout picker
-```
+- **Capture Process:** The user stands 1–2 metres back; the frontend currently captures 20 camera frames over approximately 3 seconds (scaled to $\le 1280$px).
+- **Upload:** Submits multipart form-data to `POST /api/fashion-items/{id}/size-scan` (browser automatically generates multipart boundary).
+- **Result:** Returns recommended size, alternative size, confidence score, and `borderline` flag.
+- **Display Rule:** When `borderline: true`, the UI displays `sizeRange` (e.g. "Between M and L"). When `false`, displays `size`.
 
 ### 5.6 Single-Product Checkout & Idempotency
-- **User Actions:** Select a garment, variant color, and size, enter shipping name and phone, and place an order using Cash on Delivery (COD) or Card.
-- **Important Backend Rule:** `POST /api/orders` supports **one product per order** (`fashionItemId`, `variantId`, `size`, `quantity`). It does not support a multi-product `items[]` array. Multi-product shopping cart checkout requires a backend contract update before it can be integrated.
-- **Order Totals:** Order prices and totals are recalculated and validated by the backend. The frontend cannot manipulate final totals.
-- **Idempotency:** Generates an RFC4122 v4 UUID transmitted via header: `Idempotency-Key: chk_<uuid>`.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Page as CheckoutPage
-    participant CommCtx as CommerceContext
-    participant Backend as Backend (/api/orders)
-
-    User->>Page: Fills shipping name, phone, address
-    User->>Page: Selects Cash on Delivery (COD)
-    Page->>Page: Generates UUID idempotency key
-    Page->>Backend: POST /api/orders (Single Product Payload + Idempotency-Key)
-    Backend->>Backend: Recalculate totals, validate stock, record pending order
-    Backend-->>Page: { orderNumber: "ORD-849204", status: "pending", receiptAccessToken: "tok_..." }
-    Page->>CommCtx: recordConfirmedOrder(order)
-    Page->>User: Navigates to /orders/ORD-849204 (Digital Receipt)
-```
+- **Single-Product Constraint:** The authoritative backend creates orders for **exactly one clothing item**. Multi-item cart checkout is constrained to single-product checkout.
+- **Idempotency:** Generates a unique UUID in the `Idempotency-Key` header to prevent duplicate orders during retries.
+- **Server Pricing:** Backend recalculates prices; client prices and totals are previews only and are never trusted as authoritative.
+- **Inventory/Stock Rule:** Sizing availability from the backend indicates manufacturability, not inventory stock availability.
 
 ### 5.7 Stripe Payments & Backend Payment Verification
-- **User Actions:** Select "Credit / Debit Card (Stripe)" on checkout. Redirected to Stripe Hosted Checkout, then returned to `/orders/{orderNumber}?session_id={CHECKOUT_SESSION_ID}`.
-- **Flow:**
-  1. Frontend creates hosted checkout session via serverless helper `POST /api/payments/stripe`.
-  2. Browser redirects to Stripe Hosted Checkout.
-  3. After payment, Stripe redirects to `/orders/{orderNumber}?session_id=cs_...`.
-  4. `ReceiptPage.tsx` verifies the session with Stripe.
-  5. `ReceiptPage.tsx` calls `POST /api/orders/{orderNumber}/verify-payment` with `{ "sessionId": "cs_..." }`.
-  6. The ASP.NET Core backend marks the database record as `paid`.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Page as CheckoutPage
-    participant Edge as Vercel Helper (/api/payments/stripe)
-    participant Stripe as Stripe Checkout
-    participant Receipt as ReceiptPage
-    participant Backend as Backend (/api/orders/{id}/verify-payment)
-
-    User->>Page: Selects "Pay with Credit/Debit Card"
-    Page->>Edge: POST /api/payments/stripe (orderNumber, fashionItemId, ...)
-    Edge->>Stripe: POST /v1/checkout/sessions
-    Stripe-->>Edge: { sessionId: "cs_...", checkoutUrl: "https://checkout.stripe.com/..." }
-    Edge-->>Page: { checkoutUrl: "..." }
-    Page->>User: Redirects browser to Stripe Hosted Checkout
-    User->>Stripe: Submits card payment
-    Stripe->>Receipt: Redirects to /orders/{orderNumber}?session_id=cs_...
-    Receipt->>Edge: GET /api/payments/stripe?sessionId=cs_...
-    Edge-->>Receipt: { verified: true, paymentStatus: "paid" }
-    Receipt->>Backend: POST /api/orders/{orderNumber}/verify-payment ({ sessionId })
-    Backend-->>Receipt: Order updated to paid
-    Receipt-->>User: Displays confirmed paid digital receipt
-```
+- Stripe Checkout session created via Vercel helper `POST /api/payments/stripe`.
+- Payment verified on return via backend `POST /api/orders/{orderNumber}/verify-payment` using `{ "sessionId": "..." }`.
+- Backend marks order as `paid` and awards loyalty points.
+- If Stripe is selected but payable total is zero, backend handles `zero_payable_total`; user must choose COD.
 
 ### 5.8 Customer Loyalty Rewards & Verification Behavior
-- **User Actions:** Enter phone number on `/loyalty`, confirm OTP code, inspect points ledger and tier status, and apply discounts during checkout.
-- **Endpoints:** `GET /api/loyalty/rules`, `POST /api/loyalty/verify-request`, `POST /api/loyalty/verify-confirm`, `GET /api/loyalty/account`.
-- **Token Handling:**
-  - `POST /api/loyalty/verify-confirm` returns a short-lived `verificationToken`.
-  - The token must be sent as `Authorization: Bearer <token>` when accessing `GET /api/loyalty/account`.
-  - The token must also be sent as `loyaltyVerificationToken` when redeeming points in `POST /api/orders`.
-  - Held strictly in volatile React memory (never in `localStorage`).
-- **Backend Demo Mode:** The backend returns `"Demo mode: no SMS is sent. Enter the code 123456."`. Entering `123456` verifies the customer and returns a bearer token.
+- **Earning:** 1 point per 10 EGP spent on the final paid total (`Math.Floor(finalTotalEgp / 10)`).
+- **Redemption:** 100 points = 10 EGP discount (multiples of 100, up to 100% of order value).
+- **Verification:** Phone OTP challenge (`POST /api/loyalty/verify-request`, demo code `123456`) returns a verification token.
+- **Security Rule:** Verification token is kept **strictly in React memory only**; never saved to `localStorage`, `sessionStorage`, or cookies.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Modal as LoyaltyPage / Modal
-    participant CommCtx as CommerceContext
-    participant Backend as Backend (/api/loyalty/*)
-
-    User->>Modal: Inputs phone number (e.g. 01012345678)
-    Modal->>CommCtx: requestCustomerVerification(phone)
-    Backend-->>CommCtx: { challengeSent: true, message: "Demo mode: Enter 123456" }
-    User->>Modal: Inputs verification code 123456
-    Modal->>CommCtx: confirmCustomerVerification(phone, "123456")
-    CommCtx->>Backend: POST /api/loyalty/verify-confirm ({ phone, code })
-    Backend-->>CommCtx: { verificationToken: "tok_...", account: { currentBalance: 250 } }
-    CommCtx->>CommCtx: Stores token in transient React memory (never localStorage)
-    CommCtx-->>Modal: Displays points balance & unlocks discount redemption
-```
-
-### 5.9 Digital Receipts & Tokenized Session Persistence
-- **User Actions:** Access `/orders/{orderNumber}` to review line items, payment status, transaction references, and print physical or PDF receipts.
-- **Header Requirement:** `GET /api/orders/{orderNumber}` requires the `X-Receipt-Token` header.
-- **Tab-Scoped Persistence:** Orders recorded upon creation are cached in `sessionStorage` (`tryonstudio_session_orders`). Refreshing the browser tab within the same session reloads the receipt with its authorization token intact without leaking it across sessions.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Page as ReceiptPage
-    participant Session as sessionStorage
-    participant API as Backend (/api/orders/{id})
-
-    User->>Page: Visits /orders/ORD-849204
-    Page->>Session: Reads tryonstudio_session_orders
-    Session-->>Page: Returns cached order with receiptAccessToken
-    Page->>API: GET /api/orders/ORD-849204 (Header: X-Receipt-Token)
-    API-->>Page: Authoritative order details
-    Page-->>User: Renders digital receipt & enables Print / PDF
-```
+### 5.9 Digital Receipts & Tokenized Persistence
+- Order creation returns `receiptAccessToken` once in the `201 Created` response.
+- Stored by order number in `localStorage` under `tys.receiptTokens`.
+- Subsequent retrieval via `GET /api/orders/{orderNumber}` requires `X-Receipt-Token` header.
+- Remote GET returns `receiptAccessToken: null`. Frontend merges remote data while preserving the locally stored token.
+- No fake fallback orders or fake receipts are ever presented as successful purchases.
 
 ### 5.10 Bi-Directional Arabic (RTL) & English (LTR) Localization
-- **User Actions:** Toggle the language button in the top navigation header (`العربية` / `English`).
-- **Architecture:** `LanguageContext.tsx` maintains 280 English and 280 Arabic translation keys.
-- **RTL Mirroring:** Updates document direction via `<html dir="rtl" lang="ar">`.
-- **`<bdi>` Bi-Directional Isolation:** Prevents alphanumeric reversals on mixed-language strings:
-  - Product names (`Monospace Tee`)
-  - Numeric prices (`formatEgp(2500, 'ar')` $\rightarrow$ `<bdi>2,500 ج.م</bdi>`)
-  - Sizes (`<bdi>XXL</bdi>`)
-
-```mermaid
-flowchart LR
-    LangToggle["Language Toggle Click"] --> LangCtx["LanguageContext.tsx"]
-    LangCtx --> SetState["Set language: 'ar' | 'en'"]
-    SetState --> SetHtml["document.documentElement: dir='rtl' lang='ar'"]
-    SetState --> ReRender["Re-render with t(key, params)"]
-    ReRender --> BDI["Wrap Names, Prices, and Sizes in bdi tags"]
-```
+- Seamless toggle between Arabic and English across all UI components.
+- Arabic uses RTL layout, Cairo typography, and native translations.
+- Product names, prices, and size codes remain unchanged in English/numbers wrapped in `<bdi>` tags.
 
 ### 5.11 Responsive Mobile & Desktop Layouts
-- **Handsets (< 640px):** Single-column stacked layouts, sticky bottom action bar, compact floating action button for AI Stylist, and slide-out navigation drawer with Escape-key dismiss.
-- **Tablets (640px – 1024px):** Dual-column layout with collapsible navigation bar.
-- **Desktop (1024px – 1440px+):** Multi-column studio experience with live camera mirror, side-by-side 360° rack, and variant selector.
+- **Mobile (< 640px):** Single-column stacked layouts, sticky action bar, compact floating AI assistant button.
+- **Tablet (640px–1024px):** Dual-column layout with collapsible navigation.
+- **Desktop (1024px+):** Multi-column studio experience with live camera mirror, 360° rack, and variant selectors.
 
 ---
 
-## 6. Complete Backend Swagger API Reference
+## 6. Authoritative Backend Contract & Swagger API Reference
 
-All backend endpoints are defined in the Swagger/OpenAPI specification at `https://clothesai3d.runasp.net/swagger/v1/swagger.json`.
+### 6.1 Source of Truth & Critical Route Corrections
 
-Base URL: `https://clothesai3d.runasp.net`
+The authoritative backend runs at `https://clothesai3d.runasp.net`. Swagger is published at `https://clothesai3d.runasp.net/swagger`.
 
-### 6.1 Standard Error Response Structure
-Every failed request returns an `ErrorResponse` payload:
+> [!IMPORTANT]
+> The project owner's latest backend handoff takes precedence over older documentation or outdated Swagger annotations whenever a conflict arises.
+
+| Outdated / Deprecated Route | Authoritative Correct Route | Method | Notes |
+| :--- | :--- | :---: | :--- |
+| `/api/loyalty/challenge` | `/api/loyalty/verify-request` | `POST` | Initiates OTP challenge (demo code `123456`) |
+| `/api/loyalty/verify` | `/api/loyalty/verify-confirm` | `POST` | Validates OTP and issues scoped verification token |
+| `/api/loyalty/account/{phone}` | `/api/loyalty/account` | `GET` | Requires `Authorization: Bearer <verificationToken>` header |
+| `/api/fashion-items/categories` | `/api/categories` | `GET` | Top-level categories endpoint |
+| `/api/fashion-items/rack-items` | `/api/fashion-items/rack?take=6` | `GET` | Query parameter clamped 1–20; returns ~24 ordered frames |
+| `POST /api/fashion-items/size-check` | `POST /api/fashion-items/{id}/size-check` | `POST` | Item ID is a required path parameter |
+
+---
+
+### 6.2 Standard Error Response Structure & HTTP Status Codes
+
+All backend endpoints return standardized error payloads:
 ```json
 {
-  "error": "Human-readable error description.",
-  "code": "error_code_identifier",
+  "error": "Descriptive error message.",
+  "code": "error_identifier_code",
   "errors": {
-    "FieldName": ["Validation error message"]
+    "FieldName": ["Validation failure description"]
   }
 }
 ```
-- `error` (string, nullable): Main error message read by `fashionApi.ts` and `commerceApi.ts`.
-- `code` (string, nullable): Machine-readable error code.
-- `errors` (object, nullable): Dictionary of field-level validation errors (ASP.NET ModelState).
+
+#### Confirmed HTTP Status Behavior:
+
+| HTTP Status | Meaning | Application Handling |
+| :---: | :--- | :--- |
+| **200** | Successful request | Process JSON response body. |
+| **201** | Resource / order created | Order created successfully; extract `receiptAccessToken`. |
+| **304** | Cached response | Browser uses cached asset (ETag match). |
+| **400** | Validation error | Display validation errors from `errors` object. Loyalty returns `invalid_code`. |
+| **401** | Unauthorized | Missing, invalid, or expired loyalty token (`Authorization: Bearer <token>`). |
+| **403** | Phone mismatch | Authenticated token phone does not match checkout customer phone. |
+| **404** | Not Found | Resource missing, or order not found / invalid `X-Receipt-Token`. |
+| **409** | Conflict | Business conflict: `balance_changed`, `idempotency_key_reused`, or product has no sizes. |
+| **413** | Payload too large | Frame upload exceeds 2 MB per image or 20 MB total. |
+| **422** | Size scan failed | AI engine could not compute body measurements (`no_pose`, `too_close`, `turned`, `bad_height`). |
+| **429** | Rate limited | IP limit reached. Read and honor the `Retry-After` header. Loyalty returns `otp_locked`. |
+| **502** | Provider unavailable | Upstream AI engine (Decart, size scanner) waking up or unreachable. |
+| **503** | Service not configured | Required server feature or secret is unconfigured. |
+| **500** | Server error | Unexpected internal server error; display retry action. |
 
 ---
 
-### 6.2 Health & Media Endpoints
+### 6.3 Authoritative Rate Limits
+
+Rate limits enforced per IP per minute by the ASP.NET Core backend:
+
+| Operation | Limit (req/min/IP) | Notes |
+| :--- | :---: | :--- |
+| **Try-On Token (`/api/tryon/token`)** | 10 | Ephemeral token acquisition for WebRTC |
+| **Size Scan (`/api/fashion-items/{id}/size-scan`)** | 10 | Multi-frame camera upload |
+| **Assistant Chat (`/api/assistant/chat`)** | 18 | Conversational AI stylist inference |
+| **Orders & Payment Verification (`/api/orders/*`)** | 10 | Combined limit for order creation and payment confirmation |
+| **Loyalty OTP Challenges (`/api/loyalty/verify-*`)** | 10 | Combined limit for challenge request and confirmation |
+
+---
+
+### 6.4 Health & Media Endpoints
 
 #### `GET /api/health`
-- **Purpose:** Server and storage health telemetry.
-- **Parameters:** None.
-- **Responses:**
-  - `200 OK`: `HealthResponse`
-    ```json
-    {
-      "status": "healthy",
-      "database": "ok",
-      "storage": "writable",
-      "products": 15,
-      "mediaFiles": 425,
-      "missingFiles": 0,
-      "aiSizeService": "ok"
-    }
-    ```
-  - `503 Service Unavailable`: Server or database failure.
-
-#### `GET /api/media/{id}`
-- **Purpose:** Static image file retrieval.
-- **Path Parameter:** `id` (string, required) — Media file GUID.
-- **Query Parameter:** `v` (optional cache-busting version, e.g. `?v=2`).
-- **Responses:**
-  - `200 OK`: Binary image file (image/jpeg or image/png).
-  - `304 Not Modified`: Cached asset.
-  - `404 Not Found`: Media file does not exist.
-
----
-
-### 6.3 Catalog & Categories Endpoints
-
-#### `GET /api/categories`
-- **Purpose:** All categories with item counts for navigation and filters.
-- **Parameters:** None.
-- **Responses:**
-  - `200 OK`: Array of `CategoryDto`
-    ```json
-    [
-      { "id": 1, "name": "T-Shirts", "slug": "t-shirts", "itemCount": 7 },
-      { "id": 2, "name": "Polo Shirts", "slug": "polo-shirts", "itemCount": 2 },
-      { "id": 3, "name": "Hoodies & Sweatshirts", "slug": "hoodies", "itemCount": 4 },
-      { "id": 4, "name": "Jackets & Outerwear", "slug": "jackets", "itemCount": 2 }
-    ]
-    ```
-
-#### `GET /api/categories/{categoryId}/fashion-items`
-- **Purpose:** Garments belonging to one category.
-- **Path Parameter:** `categoryId` (integer, required, minimum: 1).
-- **Responses:**
-  - `200 OK`: Array of `FashionItemDto`.
-  - `404 Not Found`: Category does not exist.
-
-#### `GET /api/fashion-items`
-- **Purpose:** List, filter, and search clothing items. Both query parameters are optional.
-- **Query Parameters:**
-  - `CategoryId` (integer, optional, min: 1, max: 2147483647).
-  - `Search` (string, optional, maxLength: 100).
-- **Responses:**
-  - `200 OK`: Array of `FashionItemDto`
-    ```json
-    [
-      {
-        "id": 1,
-        "name": "Monospace Tee",
-        "description": "Your t-shirt is your second skin...",
-        "price": 20.0,
-        "categoryId": 1,
-        "categoryName": "T-Shirts",
-        "thumbnailUrl": "https://clothesai3d.runasp.net/api/media/...",
-        "variantCount": 1
-      }
-    ]
-    ```
-  - `400 Bad Request`: Invalid search query or category ID.
-
-#### `GET /api/fashion-items/rack`
-- **Purpose:** Garments for the 360° interactive rack, each with ordered rotational frames.
-- **Query Parameter:** `Take` (integer, optional, min: 1, max: 20, default: 6).
-- **Responses:**
-  - `200 OK`: Array of `RackItemDto`
-    ```json
-    [
-      {
-        "id": "1",
-        "name": "Monospace Tee",
-        "price": 20.0,
-        "frames": [
-          "https://clothesai3d.runasp.net/api/media/...v=2",
-          "https://clothesai3d.runasp.net/api/media/...v=2"
-        ]
-      }
-    ]
-    ```
-  - `400 Bad Request`: `Take` is out of allowable bounds.
-
-#### `GET /api/fashion-items/{id}`
-- **Purpose:** Full garment details, color variants, and offered sizes.
-- **Path Parameter:** `id` (integer, required).
-- **Responses:**
-  - `200 OK`: `FashionItemDetailsDto`
-    ```json
-    {
-      "id": 1,
-      "name": "Monospace Tee",
-      "description": "Your t-shirt is your second skin...",
-      "price": 20.0,
-      "categoryId": 1,
-      "categoryName": "T-Shirts",
-      "variants": [
-        {
-          "id": 1,
-          "colorName": "Pure Blue",
-          "colorHex": "#0051ba",
-          "imageUrl": "https://clothesai3d.runasp.net/api/media/...",
-          "tryOnPrompt": "A person wearing a royal blue crewneck t-shirt"
-        }
-      ],
-      "availableSizes": ["S", "M", "L", "XL", "XXL"]
-    }
-    ```
-  - `404 Not Found`: Item not found.
-
-#### `GET /api/fashion-items/{id}/variants`
-- **Purpose:** Color variants of one item.
-- **Path Parameter:** `id` (integer, required).
-- **Responses:**
-  - `200 OK`: Array of `FashionVariantDto`.
-  - `404 Not Found`: Item not found.
-
----
-
-### 6.4 Sizing & Camera Body Scan Endpoints
-
-#### `GET /api/sizes`
-- **Purpose:** Every size code the system accepts, ordered smallest to largest.
-- **Parameters:** None.
-- **Responses:**
-  - `200 OK`: `["XS", "S", "M", "L", "XL", "XXL", "XXXL"]`.
-
-#### `GET /api/fashion-items/{id}/sizes`
-- **Purpose:** Sizes this specific product is manufactured in (ordered XS..XXXL).
-- **Path Parameter:** `id` (integer, required).
-- **Responses:**
-  - `200 OK`: Array of strings, e.g. `["S", "M", "L", "XL", "XXL"]`.
-  - `404 Not Found`: Item not found.
-
-#### `POST /api/fashion-items/{id}/size-check`
-- **Purpose:** Checks a recommended size against the product's offered manufactured sizes.
-- **Path Parameter:** `id` (integer, required).
-- **Headers:** `Content-Type: application/json`.
-- **Request Body:** `SizeCheckRequest`
+- **Purpose:** Server telemetry, database connectivity, and upstream provider status.
+- **Response (`200 OK`):**
   ```json
   {
-    "size": "M"
+    "status": "healthy",
+    "database": "ok",
+    "storage": "writable",
+    "products": 15,
+    "mediaFiles": 425,
+    "missingFiles": 0,
+    "aiSizeService": "ok"
   }
   ```
-  - `size` (string, required, minLength: 1, maxLength: 10).
-- **Responses:**
-  - `200 OK`: `SizeCheckResponse`
-    ```json
-    {
-      "fashionItemId": 1,
-      "requestedSize": "M",
-      "isAvailable": true,
-      "availableSizes": ["S", "M", "L", "XL", "XXL"],
-      "nearestAvailableSizes": []
-    }
-    ```
-  - `400 Bad Request`: Missing or invalid size string.
-  - `404 Not Found`: Item not found.
+
+#### `GET /api/media/{id}`
+- **Format:** WebP binary format.
+- **Caching:** Immutable 1-year cache duration (`Cache-Control: public, max-age=31536000, immutable`).
+- **Headers:** Supports ETag validation and CORS (`*`).
+- **Usage:** Clients must use the exact media URL returned by backend responses.
+
+---
+
+### 6.5 Catalog & Categories Endpoints
+
+#### `GET /api/categories`
+- **Response (`200 OK`):**
+  ```json
+  [
+    { "id": 1, "name": "T-Shirts", "slug": "t-shirts", "itemCount": 7 },
+    { "id": 2, "name": "Polo Shirts", "slug": "polo-shirts", "itemCount": 2 },
+    { "id": 3, "name": "Hoodies & Sweatshirts", "slug": "hoodies", "itemCount": 4 },
+    { "id": 4, "name": "Jackets", "slug": "jackets", "itemCount": 2 }
+  ]
+  ```
+
+#### `GET /api/categories/{categoryId}/fashion-items`
+- Retrieves items belonging to a specific category ID.
+
+#### `GET /api/fashion-items`
+- **Query Parameters:** `CategoryId` (int32, optional), `Search` (string, optional).
+- Returns filtered array of catalog items.
+
+#### `GET /api/fashion-items/rack?take=6`
+- **Query Parameters:** `take` (int32, clamped 1–20, default 6).
+- **Response (`200 OK`):** Array of rack items. Rack `id` is a **string**.
+- **Frames:** Returns approximately 24 WebP frames ordered from back to front (`frames[0]` = back view, last frame = front view).
+
+#### `GET /api/fashion-items/{id}`
+- Returns full product details with `variants[]` and `availableSizes[]`.
+
+#### `GET /api/fashion-items/{id}/variants`
+- Returns array of color variants with `colorName`, `colorHex`, `imageUrl`, and `tryOnPrompt`.
+
+---
+
+### 6.6 Sizing & Camera Body Scan Endpoints
+
+#### `GET /api/sizes`
+- **Response (`200 OK`):** `["XS","S","M","L","XL","XXL","XXXL"]`.
+
+#### `GET /api/fashion-items/{id}/sizes`
+- **Response (`200 OK`):** Manufactured sizes available for the item (e.g. `["S","M","XXL"]`).
+
+#### `POST /api/fashion-items/{id}/size-check`
+- **Request Body:** `{ "size": "L" }`.
+- **Response (`200 OK`):**
+  ```json
+  {
+    "fashionItemId": 8,
+    "requestedSize": "L",
+    "isAvailable": false,
+    "availableSizes": ["S","M","XXL"],
+    "nearestAvailableSizes": ["M","XXL"]
+  }
+  ```
 
 #### `POST /api/fashion-items/{id}/size-scan`
-- **Purpose:** Recommends a size for this item from camera frames (AI body scan).
-- **Path Parameter:** `id` (integer, required).
-- **Headers:** `Content-Type: multipart/form-data`.
-- **Request Body:** Multipart form data containing:
-  - `frames`: Array of binary image files (8 to 40 JPEG/PNG images, max 2 MB per image, max 20 MB total upload).
-- **Responses:**
-  - `200 OK`: `SizeScanResultDto`
-    ```json
-    {
-      "size": "M",
-      "alternative": "L",
-      "borderline": false,
-      "sizeRange": "M-L",
-      "confidence": "high"
-    }
-    ```
-    - **Borderline Rule:** When `borderline` is `true`, the UI displays `sizeRange` (e.g. `"M-L"`) instead of `size`.
-    - `confidence`: `"high"` | `"medium"` | `"low"` | `"n/a"`.
-  - `400 Bad Request`: Corrupt or unreadable image data.
-  - `404 Not Found`: Item not found.
-  - `409 Conflict`: Product does not offer sizes (size scan not applicable).
-  - `422 Unprocessable Entity`: Body pose could not be extracted. Specific codes:
-    - `no_pose`: No full human pose detected.
-    - `too_close`: User is too close to camera (feet or head cropped).
-    - `turned`: User is turned sideways; must face camera directly.
-    - `bad_height`: Full body height not measurable.
-  - `429 Too Many Requests`: Rate limit reached.
-  - `502 Bad Gateway`: Upstream AI sizing service unavailable.
+- **Content-Type:** `multipart/form-data` (browser automatically generates multipart boundary).
+- **Backend Acceptance:** 8–40 JPEG/PNG frames, max 2 MB per image, max 20 MB total upload.
+- **Frontend Current Capture:** Captures 20 JPEG frames over ~3 seconds, max dimension 1280px.
+- **Timeout:** 60 seconds.
+- **Response (`200 OK`):**
+  ```json
+  {
+    "size": "M",
+    "alternative": "L",
+    "borderline": true,
+    "sizeRange": "M-L",
+    "confidence": "high"
+  }
+  ```
+- **Display Rule:** When `borderline: true`, the UI displays `sizeRange` (e.g. "Between M and L"). When `false`, displays `size`.
+- **Error Codes on 422:** `no_pose`, `too_close`, `turned`, `bad_height`.
+- **Error on 409:** Indicates the selected product has no available sizes.
 
 ---
 
-### 6.5 Virtual Try-On Token Endpoint
+### 6.7 Virtual Try-On Token Endpoint
 
 #### `POST /api/tryon/token`
-- **Purpose:** Requests a short-lived Decart AI client token before connecting or reconnecting WebRTC.
-- **Parameters:** None.
-- **Request Body:** Empty `{}`.
-- **Responses:**
-  - `200 OK`: `TryOnTokenDto`
-    ```json
-    {
-      "apiKey": "eyJhbGciOiJFZERTQSIs...",
-      "expiresAt": "2026-11-11T04:15:00.000Z"
-    }
-    ```
-    - `apiKey`: Short-lived Decart client token (~2 min validity). Never persisted in storage.
-    - `expiresAt`: ISO 8601 timestamp.
-  - `429 Too Many Requests`: Rate limit exceeded.
-  - `502 Bad Gateway`: Backend Decart API key is not configured on the server.
+- **Request Body:** `{}` (empty JSON object).
+- **Response (`200 OK`):** `{ "apiKey": "eyJhbGciOi...", "expiresAt": "2026-11-11T05:00:00Z" }`.
+- **Model:** Scoped for `lucy-vton-latest`. Token validity is ~2 minutes. Never persist to disk or storage.
 
 ---
 
-### 6.6 AI Fashion Assistant Endpoints
-
-The AI Fashion Assistant is natively hosted and executed on the ASP.NET Core backend. No frontend Gemini API key is required.
+### 6.8 AI Fashion Assistant Endpoints
 
 #### `GET /api/assistant/chat`
-- **Purpose:** Inquires whether the assistant is configured on the server (no secrets returned).
-- **Parameters:** None.
-- **Responses:**
-  - `200 OK`: `AssistantStatusDto`
-    ```json
-    {
-      "configured": true,
-      "provider": "google-gemini",
-      "model": "gemini-3.5-flash",
-      "usdToEgpRate": 50.0
-    }
-    ```
+- **Response (`200 OK`):** Telemetry:
+  ```json
+  {
+    "configured": true,
+    "provider": "google-gemini",
+    "model": "gemini-3.5-flash",
+    "usdToEgpRate": 50
+  }
+  ```
+  *Note:* The model name must be read dynamically from the backend rather than hardcoded.
 
 #### `POST /api/assistant/chat`
-- **Purpose:** Sends session chat history and context to the backend AI stylist.
-- **Headers:** `Content-Type: application/json`.
-- **Request Body:** `AssistantChatRequest`
+- **Timeout:** 55 seconds.
+- **Constraints:** Last 16 messages evaluated; latest message must be from `user` (max 1200 characters).
+- **Request Body:**
   ```json
   {
     "messages": [
-      { "role": "user", "content": "What shirts do you recommend for casual Fridays?" }
+      { "role": "user", "content": "Suggest a stylish jacket for cooler evenings." }
     ],
     "language": "en",
     "context": {
-      "selectedItem": {
-        "id": 1,
-        "name": "Monospace Tee",
-        "categoryName": "T-Shirts",
-        "priceUsd": 20.0,
-        "selectedColor": "Pure Blue",
-        "availableColors": ["Pure Blue"],
-        "availableSizes": ["S", "M", "L", "XL", "XXL"]
-      },
+      "selectedItem": { "id": 1, "name": "Minimalist Denim Jacket", "categoryName": "Jackets", "priceUsd": 45 },
       "outfitConfirmed": true,
-      "tryOnActive": false,
-      "scannedSize": "M",
-      "stylePreferences": {
-        "aesthetic": "minimal",
-        "fit": "regular",
-        "undertone": "cool",
-        "budgetEgp": 2000.0
-      },
-      "verifiedLoyaltyPoints": 250
+      "scannedSize": "L",
+      "stylePreferences": { "aesthetic": "Casual", "fit": "Regular", "budgetEgp": 3000 },
+      "verifiedLoyaltyPoints": 450
     }
   }
   ```
-  - `messages`: Array of `AssistantMessageDto` (up to 16 turns; user content max 1200 characters; last turn must be from user).
-  - `language`: `"en"` | `"ar"`.
-  - `context`: Optional `AssistantContextDto`.
-- **Responses:**
-  - `200 OK`: `AssistantChatResponseDto`
-    ```json
-    {
-      "reply": "I recommend our Monospace Tee...",
-      "model": "gemini-3.5-flash",
-      "recommendedItems": [
-        {
-          "id": 1,
-          "name": "Monospace Tee",
-          "categoryName": "T-Shirts",
-          "priceUsd": 20.0,
-          "priceEgp": 1000.0,
-          "thumbnailUrl": "https://clothesai3d.runasp.net/api/media/...",
-          "variantCount": 1
-        }
-      ]
-    }
-    ```
-  - `400 Bad Request`: `code`: `empty_messages`, `invalid_turn`, `message_too_long`.
-  - `429 Too Many Requests`: `code`: `provider_rate_limited`.
-  - `502 Bad Gateway`: `code`: `ai_unavailable`.
-  - `503 Service Unavailable`: `code`: `ai_unconfigured`.
+- **Response (`200 OK`):**
+  ```json
+  {
+    "reply": "The Minimalist Denim Jacket in Classic Indigo pairs well with neutral chinos...",
+    "model": "gemini-3.5-flash",
+    "recommendedItems": [
+      {
+        "id": 1,
+        "name": "Minimalist Denim Jacket",
+        "categoryName": "Jackets",
+        "priceUsd": 45.0,
+        "priceEgp": 2250,
+        "thumbnailUrl": "https://clothesai3d.runasp.net/api/media/denim-1",
+        "variantCount": 5
+      }
+    ]
+  }
+  ```
+- **Recommendations:** May return 0 to 4 real catalog items.
 
 ---
 
-### 6.7 Orders & Payment Verification Endpoints
+### 6.9 Orders & Payment Verification Endpoints
 
 #### `POST /api/orders`
-- **Purpose:** Places an order (Cash on Delivery or Card).
-- **Important Rule:** Supports **one product per order** (`fashionItemId`, `variantId`, `size`, `quantity`). It does not accept multi-product `items[]`. Multi-product cart checkout requires a backend contract update.
-- **Headers:**
-  - `Content-Type: application/json`
-  - `Idempotency-Key: <uuid>` (recommended UUID v4 header to prevent double submission).
-- **Request Body:** `CreateOrderDto`
+- **Headers:** `Content-Type: application/json`, `Idempotency-Key: <UUID>`.
+- **Constraint:** Single clothing product per order only.
+- **Request Body (`CreateOrderPayload`):**
   ```json
   {
     "fashionItemId": 1,
     "variantId": 1,
-    "size": "M",
+    "size": "L",
     "quantity": 1,
     "customer": {
       "fullName": "Mohamed Gamal",
       "phone": "01012345678"
     },
     "paymentMethod": "cod",
-    "pointsToRedeem": 100,
-    "loyaltyVerificationToken": "6d77bdf8..."
+    "pointsToRedeem": 500,
+    "loyaltyVerificationToken": "tok_loyalty_98234_abc"
   }
   ```
-  - `fashionItemId` (integer, required, min: 1).
-  - `quantity` (integer, required, min: 1, max: 20).
-  - `customer` (object, required): `fullName` ($\ge 3$ chars, $\ge 2$ words), `phone` (valid format).
-  - `paymentMethod` (string, required): `"cod"` or `"stripe"`.
-  - `variantId` (integer, optional, nullable).
-  - `size` (string, optional, nullable; required if item offers sizes).
-  - `pointsToRedeem` (integer, optional, multiple of redemption block points, e.g. 100).
-  - `loyaltyVerificationToken` (string, optional, required if `pointsToRedeem` > 0).
-- **Backend Price Validation:** Order prices, discounts, and final totals are recalculated and verified by the backend. Client values are not trusted blindly.
-- **Responses:**
-  - `200 OK` / `201 Created`: `OrderDto`
-    ```json
-    {
-      "orderNumber": "ORD-849204",
-      "receiptNumber": "REC-849204",
-      "transactionReference": "COD-849204",
-      "customerName": "Mohamed Gamal",
-      "customerPhoneMasked": "010••••••78",
-      "currency": "EGP",
-      "items": [
-        {
-          "fashionItemId": 1,
-          "productName": "Monospace Tee",
-          "categoryName": "T-Shirts",
-          "variantId": 1,
-          "colorName": "Pure Blue",
-          "imageUrl": "https://clothesai3d.runasp.net/api/media/...",
-          "size": "M",
-          "quantity": 1,
-          "unitPriceEgp": 1000.0,
-          "unitPriceUsd": 20.0,
-          "lineTotalEgp": 1000.0
-        }
-      ],
-      "subtotalEgp": 1000.0,
-      "discountEgp": 10.0,
-      "pointsRedeemed": 100,
-      "finalTotalEgp": 990.0,
-      "paymentMethod": "cod",
-      "paymentStatus": "pending_collection",
-      "orderStatus": "confirmed",
-      "createdAt": "2026-11-11T04:18:00Z",
-      "pointsEarned": 99,
-      "updatedLoyaltyBalance": 150,
-      "checkoutUrl": null,
-      "receiptAccessToken": "tok_sec_984392"
-    }
-    ```
-  - `400 Bad Request`: Validation failure (e.g. missing customer or invalid phone).
-  - `401 Unauthorized`: Invalid or expired loyalty verification token.
-  - `404 Not Found`: Garment or variant does not exist.
-  - `409 Conflict`: Item or size is out of stock.
-  - `429 Too Many Requests`: Rate limit reached.
+- **Status Responses:**
+  - `201 Created`: New order created.
+  - `200 OK`: Idempotent duplicate request returned identical existing order.
+- **Response Fields:**
+  ```json
+  {
+    "orderNumber": "TYS-20261111-8921",
+    "receiptNumber": "REC-TYS-20261111-8921",
+    "transactionReference": "COD-TYS-20261111-8921",
+    "customerName": "Mohamed Gamal",
+    "customerPhoneMasked": "010••••••78",
+    "currency": "EGP",
+    "items": [...],
+    "subtotalEgp": 2250,
+    "discountEgp": 50,
+    "pointsRedeemed": 500,
+    "finalTotalEgp": 2200,
+    "paymentMethod": "cod",
+    "paymentStatus": "pending_collection",
+    "orderStatus": "confirmed",
+    "createdAt": "2026-11-11T05:00:00Z",
+    "pointsEarned": 220,
+    "updatedLoyaltyBalance": 450,
+    "checkoutUrl": null,
+    "receiptAccessToken": "rcpt_sec_9942a8b3e"
+  }
+  ```
 
 #### `GET /api/orders/{orderNumber}`
-- **Purpose:** Retrieves an order and digital receipt.
-- **Path Parameter:** `orderNumber` (string, required).
 - **Required Header:** `X-Receipt-Token: <receiptAccessToken>`.
-- **Responses:**
-  - `200 OK`: `OrderDto`.
-  - `404 Not Found`: Order not found or `X-Receipt-Token` invalid/missing.
+- **Response (`200 OK`):** Authoritative order and digital receipt.
+- *Crucial Rule:* The backend response intentionally returns `"receiptAccessToken": null`. Clients must **preserve** their locally stored receipt token when merging remote order data.
 
 #### `POST /api/orders/{orderNumber}/verify-payment`
-- **Purpose:** Confirms a Stripe Checkout payment with Stripe itself and updates the order status to `paid`.
-- **Path Parameter:** `orderNumber` (string, required).
-- **Headers:** `Content-Type: application/json`.
-- **Request Body:** `VerifyPaymentDto`
-  ```json
-  {
-    "sessionId": "cs_test_a1b2c3d4..."
-  }
-  ```
-  - `sessionId` (string, required, maxLength: 200).
-- **Responses:**
-  - `200 OK`: `OrderDto` (with `paymentStatus: "paid"` and updated `transactionReference`).
-  - `400 Bad Request`: Session ID mismatch or payment unconfirmed.
-  - `404 Not Found`: Order not found.
-  - `502 Bad Gateway`: Stripe API error.
+- **Request Body:** `{ "sessionId": "cs_test_..." }`.
+- **Response (`200 OK`):** Authoritative verification of completed Stripe session. Transitions status to `paid` / `confirmed` and permanently awards loyalty points.
 
 ---
 
-### 6.8 Customer Loyalty Program Endpoints
+### 6.10 Customer Loyalty Program Endpoints
 
 #### `GET /api/loyalty/rules`
-- **Purpose:** Returns authoritative rules for how points are earned and spent.
-- **Parameters:** None.
-- **Responses:**
-  - `200 OK`: `LoyaltyRulesDto`
-    ```json
-    {
-      "earnUnitAmountEgp": 10.0,
-      "pointsEarnedPerUnit": 1,
-      "redemptionBlockPoints": 100,
-      "redemptionBlockValueEgp": 10.0,
-      "minRedemptionPoints": 100,
-      "maxRedemptionRatio": 1.0
-    }
-    ```
-    - `earnUnitAmountEgp`: 10 EGP spent per unit.
-    - `pointsEarnedPerUnit`: 1 point earned per unit (10 EGP = 1 point).
-    - `redemptionBlockPoints`: 100 points per redemption block.
-    - `redemptionBlockValueEgp`: 10 EGP discount per block (100 points = 10 EGP).
-    - `minRedemptionPoints`: 100 points minimum to redeem.
-    - `maxRedemptionRatio`: 1.0 (100% of merchandise can be paid with points).
+- **Response (`200 OK`):**
+  ```json
+  {
+    "earnUnitAmountEgp": 10.0,
+    "pointsEarnedPerUnit": 1,
+    "redemptionBlockPoints": 100,
+    "redemptionBlockValueEgp": 10.0,
+    "minRedemptionPoints": 100,
+    "maxRedemptionRatio": 1.0
+  }
+  ```
 
 #### `POST /api/loyalty/verify-request`
-- **Purpose:** Initiates customer identity verification by sending an OTP code.
-- **Backend Demo Mode:** The backend returns `"Demo mode: no SMS is sent. Enter the code 123456."`.
-- **Request Body:** `LoyaltyVerifyRequestDto`
-  ```json
-  {
-    "phone": "01012345678"
-  }
-  ```
-  - `phone` (string, required, maxLength: 30).
-- **Responses:**
-  - `200 OK`: `LoyaltyVerifyRequestResponseDto`
-    ```json
-    {
-      "challengeSent": true,
-      "expiresInSeconds": 300,
-      "message": "Demo mode: no SMS is sent. Enter the code 123456."
-    }
-    ```
-  - `400 Bad Request`: Invalid phone number.
-  - `429 Too Many Requests`: OTP rate limit exceeded.
+- **Request Body:** `{ "phone": "01012345678" }`.
+- **Response (`200 OK`):** `{ "challengeSent": true, "expiresInSeconds": 300, "message": "Demo mode: no SMS is sent. Enter the code 123456." }`.
+- *Demo Note:* Fixed code `123456`. Expires in 5 minutes. Max 5 wrong attempts then `429 otp_locked` (not 404).
 
 #### `POST /api/loyalty/verify-confirm`
-- **Purpose:** Validates the verification code and returns a short-lived bearer token and account ledger.
-- **Request Body:** `LoyaltyVerifyConfirmRequestDto`
-  ```json
-  {
-    "phone": "01012345678",
-    "code": "123456"
-  }
-  ```
-  - `phone` (string, required, maxLength: 30).
-  - `code` (string, required, minLength: 4, maxLength: 12).
-- **Responses:**
-  - `200 OK`: `LoyaltyVerifyConfirmResponseDto`
-    ```json
-    {
-      "verificationToken": "6d77bdf85618...",
-      "expiresAt": "2026-11-11T04:45:00Z",
-      "account": {
-        "customerPhoneMasked": "010••••••78",
-        "currentBalance": 250,
-        "lifetimeEarned": 500,
-        "lifetimeRedeemed": 250,
-        "availableDiscountEgp": 20.0,
-        "rules": { ... },
-        "transactions": []
-      }
-    }
-    ```
-  - `400 Bad Request`: Incorrect or expired verification code.
+- **Request Body:** `{ "phone": "01012345678", "code": "123456" }`.
+- **Response (`200 OK`):** Returns `verificationToken` (30 min expiry), `expiresAt`, and `account` summary.
+- *Security Rule:* Store strictly in React memory only. Never persist to disk or storage.
 
 #### `GET /api/loyalty/account`
-- **Purpose:** Authoritative balance and transaction history of the verified customer.
 - **Required Header:** `Authorization: Bearer <verificationToken>`.
-- **Responses:**
-  - `200 OK`: `LoyaltyAccountDto`.
-  - `401 Unauthorized`: Token missing, invalid, or expired.
+- **Response (`200 OK`):** `LoyaltyAccountSummary`.
 
 ---
 
-### 6.9 Frontend Serverless Helper Routes (Non-Swagger)
-
-These endpoints are implemented in `api/` on Vercel as frontend helper utilities. They are **not** part of the backend Swagger specification.
+### 6.11 Frontend Serverless Helper Routes (Non-Swagger)
 
 #### `POST /api/payments/stripe` (Vercel Serverless Function)
-- **Purpose:** Initiates a hosted Stripe Checkout session with server-side secrets.
 - **Implementation:** `api/payments/stripe.ts`.
 - **Request Body:**
   ```json
   {
-    "orderNumber": "ORD-849204",
+    "orderNumber": "TYS-20261111-8921",
     "fashionItemId": 1,
     "variantId": 1,
-    "size": "M",
+    "size": "L",
     "quantity": 1,
-    "verifiedDiscountEgp": 10.0,
-    "idempotencyKey": "chk_uuid"
+    "verifiedDiscountEgp": 50,
+    "idempotencyKey": "chk-uuid"
   }
   ```
-- **Responses:**
-  - `200 OK`: `{ "sessionId": "cs_...", "checkoutUrl": "https://checkout.stripe.com/...", "mode": "sandbox" }`.
-  - `400 Bad Request`: Missing persisted backend order number (`missing_persisted_order`).
+  *Crucial Rule:* `verifiedDiscountEgp` **must equal** `order.discountEgp` from the backend order creation response (never client `appliedDiscountEgp`).
+- **Response (`200 OK`):** `{ "sessionId": "cs_...", "checkoutUrl": "https://checkout.stripe.com/...", "mode": "sandbox" }`.
 
 #### `GET /api/payments/stripe` (Vercel Serverless Function)
-- **Purpose:** Queries Stripe configuration status, or verifies a session via `?sessionId=cs_...`.
-- **Implementation:** `api/payments/stripe.ts`.
+- **Status:** Legacy / diagnostic only. The authoritative payment verification process is handled by backend `POST /api/orders/{orderNumber}/verify-payment`.
 
 ---
 
 ## 7. Order, Stripe, Receipt & Loyalty Workflows
 
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Frontend as TryOnStudio Client
+    participant Vercel as Vercel Helper (/api/payments/stripe)
+    participant Backend as ASP.NET Backend (clothesai3d.runasp.net)
+    participant Stripe as Stripe Gateway
+
+    Note over Customer,Backend: 1. Order Creation & Authoritative Pricing
+    Customer->>Frontend: Fill checkout form (Name, Phone, Payment: Stripe)
+    Frontend->>Backend: POST /api/orders (Header: Idempotency-Key: UUID)
+    Backend-->>Frontend: 201 Created (orderNumber, discountEgp, receiptAccessToken)
+    Frontend->>Frontend: Save receiptAccessToken in localStorage['tys.receiptTokens']
+
+    Note over Customer,Stripe: 2. Stripe Checkout Session Creation
+    Frontend->>Vercel: POST /api/payments/stripe (orderNumber, verifiedDiscountEgp=order.discountEgp)
+    Vercel->>Stripe: Create Checkout Session
+    Stripe-->>Vercel: Session Created (sessionId, checkoutUrl)
+    Vercel-->>Frontend: { sessionId, checkoutUrl }
+    Frontend->>Customer: Redirect to Stripe Checkout
+
+    Note over Customer,Backend: 3. Return & Authoritative Payment Verification
+    Customer->>Frontend: Redirect back to /orders/{orderNumber}?session_id={id}
+    Frontend->>Backend: POST /api/orders/{orderNumber}/verify-payment { sessionId }
+    Backend->>Stripe: Verify payment status & amount
+    Backend-->>Frontend: 200 OK (paymentStatus: 'paid', pointsEarned credited)
+
+    Note over Frontend,Backend: 4. Secure Receipt Lookup
+    Frontend->>Backend: GET /api/orders/{orderNumber} (Header: X-Receipt-Token)
+    Backend-->>Frontend: 200 OK (Full order details, receiptAccessToken: null)
+    Frontend->>Frontend: Merge remote data (preserve local receipt token)
+    Frontend->>Customer: Render digital receipt & print options
+```
+
 ### 7.1 Single-Product Order Creation & Price Validation
-1. The user selects a garment, color variant, and size.
-2. The user proceeds to `/checkout` and provides their full name and phone number.
-3. The client submits a single-product payload to `POST /api/orders` with an `Idempotency-Key` header.
-4. The ASP.NET Core backend recalculates the subtotal, validates any applied loyalty discount against the `loyaltyVerificationToken`, and persists the order as `pending`.
-5. The backend returns `OrderDto` containing the authoritative `orderNumber`, `finalTotalEgp`, and `receiptAccessToken`.
+1. Customer selects a garment, variant, and size.
+2. Proceeds to `/checkout` and enters full name (3–100 chars) and mobile phone.
+3. Client submits single-item payload to `POST /api/orders` with a unique UUID in `Idempotency-Key`.
+4. Backend recalculates prices (50 EGP/USD), validates loyalty token if points are redeemed, and persists order.
+5. Returns 201 Created with `orderNumber`, `finalTotalEgp`, and `receiptAccessToken`.
 
 ### 7.2 Stripe Hosted Checkout & Backend Synchronization
-1. If payment method is `"stripe"`, the client sends order metadata to the Vercel helper `POST /api/payments/stripe`.
-2. Vercel creates a Stripe Checkout session in piastres ($1\text{ EGP} = 100\text{ piastres}$) and returns a `checkoutUrl`.
-3. The user is redirected to Stripe to enter payment details.
-4. Stripe redirects back to TryOnStudio at `/orders/{orderNumber}?session_id={CHECKOUT_SESSION_ID}`.
-5. `ReceiptPage.tsx` verifies the session with Stripe.
-6. **Crucial Backend Step:** When verified as `paid`, `ReceiptPage.tsx` immediately calls `POST /api/orders/{orderNumber}/verify-payment` with `{ "sessionId": "..." }`. The ASP.NET Core backend marks the database record as `paid`.
+1. For Stripe orders, client calls Vercel helper `POST /api/payments/stripe` passing `verifiedDiscountEgp = order.discountEgp`.
+2. Vercel creates session and returns `checkoutUrl`.
+3. Customer completes payment on Stripe and redirects to `/orders/{orderNumber}?session_id={id}`.
+4. Client immediately triggers backend `POST /api/orders/{orderNumber}/verify-payment` with `{ sessionId }`.
+5. Backend verifies payment with Stripe directly, updates status to `paid`, and permanently awards points.
 
 ### 7.3 Digital Receipt & `X-Receipt-Token` Authorization
-1. The receipt page requires the `X-Receipt-Token` header for `GET /api/orders/{orderNumber}`.
-2. Upon order creation, `receiptAccessToken` is cached in tab-scoped `sessionStorage` (`tryonstudio_session_orders`).
-3. If the user refreshes `/orders/:orderNumber`, the token is retrieved from `sessionStorage` and sent as `X-Receipt-Token`, preserving authorization without exposing the token in URLs.
+1. On order creation, client saves `receiptAccessToken` in `localStorage` under `tys.receiptTokens` keyed by order number.
+2. When loading `/orders/{orderNumber}`, client sends `X-Receipt-Token`.
+3. Backend returns order details with `receiptAccessToken: null`.
+4. Client preserves its stored token during state merge, ensuring receipt access survives page refreshes.
 
 ### 7.4 Loyalty Verification & Redemption Rules
-1. The user inputs their mobile phone on `/loyalty` or during checkout.
-2. `POST /api/loyalty/verify-request` triggers the verification challenge (in demo mode, code `123456`).
-3. `POST /api/loyalty/verify-confirm` validates the code and returns `verificationToken`.
-4. The token is sent as `Authorization: Bearer <token>` to view the ledger, and as `loyaltyVerificationToken` in `POST /api/orders` to redeem points.
-5. Tokens are held exclusively in volatile React memory and expire after their server-designated lifetime.
+1. Customer enters phone number on `/loyalty` or during checkout.
+2. Initiates challenge (`POST /api/loyalty/verify-request`).
+3. Enters demo code `123456` (`POST /api/loyalty/verify-confirm`).
+4. Receives temporary verification token stored **in React memory only**.
+5. Redeems points in multiples of 100 during checkout.
 
 ---
 
 ## 8. Environment Variables & Local Setup
 
-### 8.1 Environment Variables Reference
+### Environment Variables Separation:
+- **Frontend Client (`.env` in project root):**
+  - `VITE_API_BASE_URL=https://clothesai3d.runasp.net`
+  - *Rule:* Never place secret keys (e.g. `STRIPE_SECRET_KEY`) in browser-accessible environment variables.
+- **Vercel Serverless Gateway:**
+  - `STRIPE_SECRET_KEY=sk_test_...` (Sandbox secret key)
+  - `USD_TO_EGP_RATE=50` (Conversion rate fallback)
+  - *Legacy Deprecation:* `GEMINI_API_KEY` and `GEMINI_MODEL` on Vercel are deprecated and scheduled for removal once native backend assistant is confirmed in production.
 
-| Variable Name | Exposure | Required / Optional | Purpose | Default / Example Value |
-| :--- | :---: | :---: | :--- | :--- |
-| `VITE_API_BASE_URL` | Public (Vite) | **Required** | Authoritative ASP.NET Core backend URL | `https://clothesai3d.runasp.net` |
-| `VITE_COMMERCE_API_BASE_URL` | Public (Vite) | Optional | Commerce override (defaults to `VITE_API_BASE_URL`) | `https://clothesai3d.runasp.net` |
-| `STRIPE_SECRET_KEY` | Server-Side Only | **Required** for Card Pay | Stripe secret API key used in `api/payments/stripe.ts` | `sk_test_...` or `sk_live_...` |
-| `USD_TO_EGP_RATE` | Server-Side Only | Optional | Fallback currency conversion multiplier | `50` |
-
-> [!NOTE]
-> The AI Fashion Assistant is handled directly by the ASP.NET Core backend at `/api/assistant/chat`. No frontend `GEMINI_API_KEY` is required.
-> If running the optional local Vercel serverless proxy (`api/assistant/chat.ts`), `GEMINI_API_KEY` can be provided server-side in `.env.local`.
-
-> [!CAUTION]
-> `STRIPE_SECRET_KEY` must **never** be prefixed with `VITE_`. It resides strictly in serverless runtime environments.
-
-### 8.2 Local Development Setup
-
-#### Prerequisites
-- Node.js LTS (v18.x, v20.x, or v24.x).
-- npm (v9+ or v10+).
-- Built-in or USB webcam (for virtual try-on and size scanning).
-
-#### Installation & Startup
+### Local Development Setup:
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/gamalwessam21/TryOnStudio.git
 cd TryOnStudio
 
@@ -1132,163 +787,360 @@ git checkout dev
 # 3. Install dependencies
 npm install
 
-# 4. Configure environment variables
-cp .env.example .env
-```
+# 4. Configure local environment (.env)
+# VITE_API_BASE_URL=https://clothesai3d.runasp.net
 
-Ensure `.env` contains:
-```env
-VITE_API_BASE_URL=https://clothesai3d.runasp.net
-STRIPE_SECRET_KEY=sk_test_your_stripe_key_here
-```
-
-```bash
-# 5. Start the local Vite development server
+# 5. Start Vite local server
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
 
-### 8.3 Available Scripts
-
-| Script Command | Purpose |
-| :--- | :--- |
-| `npm run dev` | Starts local Vite development server with local serverless API simulation on port `5173`. |
-| `npm run build` | Compiles TypeScript and builds optimized production bundles into `dist/`. |
-| `npm run preview` | Starts a local static HTTP server to preview the production build. |
-| `npm run typecheck` | Executes TypeScript strict compiler checks without emitting files (`tsc -b --noEmit`). |
-| `npm run lint` | Runs ESLint 9 across all source and API files. |
-| `npm test` | Runs all 30 unit and live backend contract tests using Vitest. |
+### Available Scripts:
+- `npm run dev`: Starts Vite local development server on `http://localhost:5173`.
+- `npm run build`: Runs TypeScript compiler and Vite production bundle.
+- `npm run preview`: Locally previews production build.
+- `npm run typecheck`: Validates TypeScript types across the project (`tsc -b --noEmit`).
+- `npm run lint`: Runs ESLint check across all files.
+- `npm test`: Runs Vitest automated test suite.
 
 ---
 
-## 9. Security, Authorization & Reliability
+## 9. Testing & Verification Status
 
-- **Zero Exposure of Private API Keys:** Verified. Neither `STRIPE_SECRET_KEY` nor any backend secrets are present in frontend bundles.
-- **Serverless Rate Limiting:** `api/assistant/chat.ts` enforces a token-bucket rate limit of 18 requests per minute per IP.
-- **PII Scrubbing:** Raw 13–19 digit sequences (credit cards) and telephone numbers are scrubbed from prompts before transmission.
-- **Transient Memory Isolation:** Decart client tokens and Loyalty bearer tokens are stored strictly in React state memory, preventing XSS extraction.
-- **Scoped Session Persistence:** Digital receipt tokens are persisted strictly within tab-scoped `sessionStorage`, isolating proof-of-purchase credentials to the active tab.
-- **Idempotency Protection:** All order submissions transmit an RFC4122 v4 UUID via `Idempotency-Key` to prevent duplicate billing during network timeouts.
-- **Frame Size & Count Boundaries:** Size-scan captures are constrained to 8–40 frames (exactly 20 captured), $\le 2\text{ MB}$ per frame, and $\le 20\text{ MB}$ total multipart payload.
-- **CORS Allowed Origins:** The authoritative backend allows `https://try-on-studio-beta.vercel.app` and `http://localhost:5173`.
+### 9.1 Verification Hierarchy & Test Categorization
+To maintain rigorous engineering standards, testing claims are strictly separated into discrete categories:
 
----
+1. **Frontend Unit Tests:** Client-side business logic, helpers, and component unit tests.
+2. **Frontend Integration Tests:** Live contract tests verifying HTTP communication against the deployed ASP.NET Core backend.
+3. **Backend Automated HTTP Tests:** 154 automated backend test cases executed on the ASP.NET Core server using mocked external providers (Stripe and Gemini).
+4. **Mocked Provider Tests:** Automated runs simulating Decart, Gemini, and Stripe gateway responses.
+5. **Real Sandbox End-to-End Tests:** *Pending confirmation* — full end-to-end checkout with real user interaction in Stripe Checkout Sandbox.
+6. **Real Production Purchase Tests:** *Pending confirmation* — live real-money transaction verification.
 
-## 10. Testing & Quality Assurance
+### 9.2 Verified Automated Test Results
+- **Frontend Test Suite (`npm test`):**
+  - `src/__tests__/commerce.test.ts` (19 tests passed)
+  - `src/__tests__/tryOnStudio.test.ts` (10 tests passed)
+  - `src/__tests__/liveBackend.test.ts` (1 live integration contract test passed against `https://clothesai3d.runasp.net`)
+  - **Total:** 30 passed out of 30 tests.
+- **Backend Automated Suite:** 154 automated HTTP tests passed with mocked providers.
 
-Automated testing is managed by **Vitest** with a **jsdom** environment:
-
-```bash
-npm test
-```
-
-### Verified Test Results (30/30 Tests Passed)
-1. **`src/__tests__/liveBackend.test.ts` (1 contract test suite covering 12 endpoints):**
-   - Verifies live connectivity, health telemetry, category tree, product details, variant swatches, global sizes, product sizes, size-checks, 360-rack rotational frames, Decart token generation, and body scan error responses on `https://clothesai3d.runasp.net`.
-2. **`src/__tests__/commerce.test.ts` (19 unit tests):**
-   - Customer full name and phone number validation.
-   - Egyptian phone normalization and privacy masking (`010••••••78`).
-   - Currency conversion (USD to EGP) and dual-currency price formatting.
-   - Authoritative loyalty points earning and redemption mathematics.
-   - Idempotency key generation (`generateIdempotencyKey`).
-3. **`src/__tests__/tryOnStudio.test.ts` (10 unit tests):**
-   - MediaPipe hand-swipe gesture detector recognizing right swipes (`next`) and left swipes (`prev`).
-   - Gating against false positives (ignoring hand gestures below hip line or steep vertical motions).
-   - Cooldown timer enforcement (1500ms lock).
-   - Frame count and byte boundary validation for AI body size scans.
-   - User-facing error message formatting for AI scan failure modes.
-
----
-
-## 11. Deployment Architecture
-
-### Vercel Deployment Configuration
-The application is deployed on Vercel as an SPA with serverless API functions via `vercel.json`:
-```json
-{
-  "rewrites": [
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
-  ]
-}
-```
-- Client-side SPA routes (`/`, `/browse`, `/size-guide`, `/assistant`, `/checkout`, `/orders/:id`, `/loyalty`, `/how-it-works`) are rewritten to `/index.html`.
-- Requests starting with `/api/` route directly to the corresponding serverless functions in `api/`.
-
-### Production Deployment URLs
-- **Production URL:** `https://try-on-studio-beta.vercel.app`
-- **Production Alias:** `https://try-on-studio-gamal15.vercel.app`
-
-> [!IMPORTANT]
-> The browser's `navigator.mediaDevices.getUserMedia` API strictly requires a secure context (**HTTPS** or `localhost`). Vercel's automated SSL certificates fulfill this requirement.
+### 9.3 17-Step Full User Journey Integration Checklist
+- [ ] **1. Browse Products:** Open `/browse`, verify category counts, and search for apparel.
+- [ ] **2. Inspect Product Details:** Open product modal, verify image gallery, description, and dual pricing ($ / EGP).
+- [ ] **3. Select Variant & Size:** Pick a color swatch and select an available size.
+- [ ] **4. Build Outfit:** Navigate to `/studio`, verify selected item appears on the mannequin.
+- [ ] **5. Confirm / Unconfirm Outfit:** Click Confirm Outfit; verify stage locks. Click again to unconfirm.
+- [ ] **6. Run Virtual Try-On:** Click Try On with AI; verify Decart WebRTC stream opens and drapes garment.
+- [ ] **7. Perform Size Scan:** Open camera size scan, stand back 1–2m, complete capture, verify size and borderline result.
+- [ ] **8. Add Item to Cart:** Add confirmed item to cart; verify quantity and price breakdown.
+- [ ] **9. Verify Loyalty Account:** Open loyalty widget, enter phone, receive challenge, enter demo OTP `123456`.
+- [ ] **10. Apply Eligible Points:** Redeem points in multiples of 100; verify discount reflects on order total.
+- [ ] **11. Enter Customer Details:** Enter customer full name and phone number on `/checkout`.
+- [ ] **12. Create Order:** Submit order with `Idempotency-Key`; verify backend returns 201 Created and order number.
+- [ ] **13. Complete Payment:** Choose COD or redirect to Stripe Checkout session.
+- [ ] **14. Verify Stripe Payment:** Return from Stripe; verify backend marks order as `paid`.
+- [ ] **15. Open Digital Receipt:** View receipt on `/orders/{orderNumber}`; verify line items, discount, and status.
+- [ ] **16. Refresh Receipt Page:** Refresh browser; verify receipt re-fetches using stored `X-Receipt-Token`.
+- [ ] **17. Confirm Loyalty Ledger:** Open `/loyalty`; verify earned points are credited and ledger updated.
 
 ---
 
-## 12. Developer Contribution Guide & Git Workflow
+## 10. Developer Contribution Guide & Git Workflow
 
-### Branch Strategy
-- **`main`**: Protected production branch. Deploys directly to the production environment. **Direct commits or pushes to `main` are strictly forbidden.**
-- **`dev`**: Active integration and development branch. All feature branches must branch off and merge into `dev`.
-- **`feature/<name>`** or **`audit/<name>`**: Isolated feature branches for individual tasks.
-
-```mermaid
-flowchart TD
-    subgraph Remote["GitHub Remote Repository"]
-        MainRemote["origin/main (Protected Production)"]
-        DevRemote["origin/dev (Active Integration)"]
-    end
-
-    subgraph Local["Developer Workstation"]
-        DevLocal["local: dev branch"]
-        FeatLocal["local: feature/your-feature"]
-    end
-
-    DevRemote -->|"git pull origin dev"| DevLocal
-    DevLocal -->|"git checkout -b feature/..."| FeatLocal
-    FeatLocal -->|"git commit -m '...'"| FeatLocal
-    FeatLocal -->|"git push origin feature/..."| RemoteFeat["origin/feature/..."]
-    RemoteFeat -->|"Open Pull Request"| DevRemote
-    DevRemote -->|"Maintainer merges approved dev"| MainRemote
-```
-
-### Developer Command Playbook
-
-#### 1. Update your local `dev` branch:
-```bash
-git checkout dev
-git pull origin dev
-```
-
-#### 2. Create a feature branch:
-```bash
-git checkout -b feature/your-feature-name
-```
-
-#### 3. Run quality checks before committing:
-```bash
-npm run typecheck
-npm run lint
-npm test
-npm run build
-```
-
-#### 4. Stage, commit, and push:
-```bash
-git add .
-git commit -m "feat: implement your feature description"
-git push -u origin feature/your-feature-name
-```
-
-#### 5. Open a Pull Request:
-Open a Pull Request on GitHub targeting the **`dev`** base branch for review.
+- **`main`:** Production branch. Protected; direct pushes and commits are prohibited.
+- **`dev`:** Shared integration branch. All feature branches branch from and target `dev`.
+- **Feature Branches:**
+  - `feature/catalog-browse` (Person 1)
+  - `feature/interactive-studio` (Person 2)
+  - `feature/cart` (Person 3)
+  - `feature/loyalty` (Person 4)
+  - `feature/checkout-receipt` (Person 5)
 
 ---
 
-## 13. Audit Documentation Index
+# 11. Team Assignments
 
-For technical audit reports, integration matrices, and verification checklists, refer to the documents in `docs/`:
-- [Frontend Integration Audit Report](docs/FRONTEND_INTEGRATION_AUDIT.md) — Comprehensive feature-by-feature audit findings, vulnerability checks, and defect resolutions.
-- [API Integration Matrix](docs/API_INTEGRATION_MATRIX.md) — Detailed specifications for all 21 backend and edge endpoints.
-- [Production Readiness Checklist](docs/PRODUCTION_READINESS_CHECKLIST.md) — Production readiness verification, user journey tests, and security checklist.
+The project implementation and maintenance responsibilities are divided among five team members.
+
+---
+
+## Person 1 — Clothing Catalog & Product Browsing
+
+**Main responsibility:** Everything related to browsing, discovering, and viewing clothing products.
+
+### Frontend Tasks
+- Implement the Browse Clothing page (`BrowsePage.tsx`).
+- Display clothing categories and their products with active category counts.
+- Implement category filtering and product search by name and description.
+- Implement product cards (`GarmentSelectorPanel.tsx`) with images, names, dual prices ($ / EGP), and color swatches.
+- Implement product details panel/modal with full variant picker and available size selector.
+- Display product variants and available sizes.
+- Implement the clothing rack / 360-degree product viewing experience (`ClothingRack360.tsx`).
+- Handle loading skeletons, empty search results, and error recovery states.
+- Ensure responsive layout on desktop, tablet, and mobile.
+
+### Backend API Integration
+- `GET /api/categories` — Load categories with product counts.
+- `GET /api/categories/{id}/fashion-items` — Load products by category ID.
+- `GET /api/fashion-items?categoryId=&search=` — Filter and search catalog items.
+- `GET /api/fashion-items/{id}` — Load detailed item data with variants and sizes.
+- `GET /api/fashion-items/{id}/variants` — Load variant swatches and try-on prompts.
+- `GET /api/fashion-items/rack?take=6` — Load 360° rotational rack items.
+- `GET /api/sizes` — Load global manufactured size scale.
+- `GET /api/fashion-items/{id}/sizes` — Load available sizes for selected item.
+
+### Important Requirements
+- Treat product IDs as returned by the backend; rack IDs are **strings**.
+- Use exact media URLs returned by the backend (`https://clothesai3d.runasp.net/api/media/{id}`).
+- Rack frames are ordered from back to front (`frames[0]` = back view, last frame = front view).
+- Preload rack frames where appropriate for smooth dragging.
+- Do not hardcode catalog data when backend data is available.
+- Do not assume that a manufacturable size means that the item is currently in stock.
+
+### Coordination
+- Coordinate with **Person 2** for selected product information and interactive try-on.
+- Coordinate with **Person 3** for cart product data.
+
+---
+
+## Person 2 — Interactive Studio, Virtual Try-On & Size Detection
+
+**Main responsibility:** The interactive experience where users select clothing, visualize outfits, try on products, and scan their size.
+
+### Frontend Tasks
+- Implement the Interactive Studio interface (`StudioPage.tsx`, `CameraMirrorPanel.tsx`, `WorkflowStepsRail.tsx`).
+- Allow users to select and deselect clothing items (`SelectedOutfitCard.tsx`).
+- Implement outfit confirmation and allow users to undo confirmation.
+- Display selected outfits clearly.
+- Implement virtual try-on via `@decartai/sdk`.
+- Handle camera permissions, WebRTC connection states, and connection errors.
+- Implement size-check experience (`fashionApi.checkSize`).
+- Implement size-scan experience (`SizeScanPanel.tsx`, `SizeResultCard.tsx`, `useSizeScan.ts`).
+- Display size recommendations, alternative sizes, confidence, and borderline results.
+- Integrate the fashion AI assistant interface (`AssistantFloatingDrawer.tsx`, `FashionAssistantPanel.tsx`).
+- Handle loading, validation, and provider errors.
+
+### Backend API Integration
+- `POST /api/fashion-items/{id}/size-check` — Validate selected size.
+- `POST /api/fashion-items/{id}/size-scan` — Multipart camera body size scan.
+- `POST /api/tryon/token` — Temporary Decart API key for WebRTC session.
+- `GET /api/assistant/chat` — Assistant configuration and status check.
+- `POST /api/assistant/chat` — Conversational stylist inference.
+
+### Important Requirements
+- Size-check requests use the selected product ID and requested size.
+- Size scan uses multipart form data with repeated `frames` fields (browser automatically generates multipart boundary).
+- Accepted scan frames: 8–40 JPEG/PNG images, max 2 MB per frame, max 20 MB total request.
+- Frontend current capture implementation: 20 JPEG frames captured over ~3 seconds, max dimension 1280 pixels.
+- Do not manually set multipart `Content-Type`.
+- Handle 422 error codes: `no_pose`, `too_close`, `turned`, `bad_height`.
+- Handle 409 when a product has no available sizes.
+- Request a fresh Decart token before every new connection or reconnection. Never persist the temporary Decart API key.
+- Read assistant model dynamically from backend status rather than hardcoding.
+
+### Assistant Integration
+- Read assistant configuration through `GET /api/assistant/chat`.
+- Send conversations through `POST /api/assistant/chat`.
+- Support Arabic and English using the `language` field.
+- Include relevant context (selected item, confirmed outfit, scanned size, style preferences) when available.
+- Display up to four real catalog recommendations returned by the backend.
+- Use a 55-second timeout.
+
+### Coordination
+- Coordinate with **Person 1** for product data.
+- Coordinate with **Person 3** for selected outfit/cart handoff.
+- Coordinate with **Person 4** when loyalty context is relevant to the assistant.
+
+---
+
+## Person 3 — Cart & Shopping Selection Management
+
+**Main responsibility:** Managing the products selected by the customer before checkout.
+
+### Frontend Tasks
+- Implement shopping cart interface.
+- Add selected products to the cart.
+- Allow customers to remove products.
+- Allow customers to update quantities (1–20).
+- Display selected variants and sizes.
+- Display product images and prices ($ / EGP).
+- Calculate and display subtotal previews.
+- Provide clear transition from cart to checkout.
+- Handle empty cart and invalid selection states.
+- Preserve cart data according to existing application architecture.
+
+### Backend Integration Requirements
+- Coordinate with **Person 1** for product IDs, variants, and sizes.
+- Coordinate with **Person 4** for loyalty discounts and redemption information.
+- Coordinate with **Person 5** for the final order payload and checkout flow.
+
+### Important Requirements
+- The backend currently supports **one product per order**.
+- Do not assume a multi-product cart can be submitted as one order.
+- If the UI supports multiple cart items, implement a clear strategy that respects the backend contract (e.g. prompt customer to checkout items individually).
+- Do not treat frontend-calculated prices or discounts as authoritative. Backend calculates the final order amount.
+- Keep quantity within the supported range of 1–20 per order item.
+
+---
+
+## Person 4 — Loyalty Program & Points Management
+
+**Main responsibility:** Customer verification, loyalty accounts, earning points, and redeeming points.
+
+### Frontend Tasks
+- Implement loyalty program interface (`LoyaltyPage.tsx`).
+- Display loyalty rules and redemption information.
+- Implement phone-number verification.
+- Implement OTP request and confirmation screens.
+- Display customer's points balance.
+- Display points earned and redeemed.
+- Allow eligible customers to select points for redemption during checkout.
+- Display loyalty-related errors clearly.
+- Handle expired verification sessions.
+
+### Backend API Integration
+- `GET /api/loyalty/rules` — Retrieve points rules.
+- `POST /api/loyalty/verify-request` — Send OTP challenge.
+- `POST /api/loyalty/verify-confirm` — Validate OTP and receive token + account summary.
+- `GET /api/loyalty/account` — Authorized ledger retrieval.
+
+### Important Requirements
+- Demo OTP is currently `123456`; SMS delivery is not currently implemented.
+- Successful verification returns a temporary `verificationToken` (expires after 30 minutes).
+- **Security Rule:** Store loyalty verification token in **React memory only**. Never store it in `localStorage`, `sessionStorage`, cookies, or persistent browser storage.
+- Retrieve loyalty account using `Authorization: Bearer <verificationToken>`.
+- Handle `400 invalid_code` and `429 otp_locked` (do not treat as 404).
+- Maximum five incorrect OTP attempts before lockout.
+- A new OTP request invalidates the previous OTP.
+
+### Loyalty Rules
+- Every EGP 10 spent earns 1 point (calculated using final order total).
+- 100 points can be redeemed for EGP 10 discount.
+- Redemption must be in multiples of 100.
+- Minimum redemption is 100 points.
+- Maximum redemption is 100% of eligible order total.
+- Backend is authoritative for all points calculations.
+
+### Coordination
+- Work closely with **Person 5** to pass verified loyalty token and redemption points into the order request.
+- Never independently update the authoritative customer balance on the frontend.
+
+---
+
+## Person 5 — Checkout, Orders, Payments & Digital Receipts
+
+**Main responsibility:** Completing purchases, communicating with the order API, handling payments, and displaying receipts.
+
+### Frontend Tasks
+- Implement checkout page (`CheckoutPage.tsx`).
+- Collect customer full name (3–100 chars) and phone number.
+- Display selected product, size, variant, and quantity.
+- Display backend-calculated order totals and discounts.
+- Support Cash on Delivery (COD) and Stripe Checkout.
+- Implement order submission and duplicate-submission protection.
+- Implement payment return handling.
+- Implement digital receipt page (`ReceiptPage.tsx`).
+- Allow users to retrieve receipts after refreshing the page.
+- Display payment and order statuses correctly.
+- Handle failed, pending, cancelled, and successful payment states.
+
+### Backend API Integration
+- `POST /api/orders` — Authoritative order creation.
+- `GET /api/orders/{orderNumber}` — Authoritative receipt retrieval.
+- `POST /api/orders/{orderNumber}/verify-payment` — Authoritative backend payment verification.
+
+### Stripe Integration
+- Preserve the existing Vercel endpoint: `POST /api/payments/stripe` (creates Stripe Checkout sessions; used by web and mobile clients).
+- **Request Fields:** `orderNumber`, `fashionItemId`, `variantId`, `size`, `quantity`, `verifiedDiscountEgp`, `idempotencyKey`.
+- **Response Fields:** `sessionId`, `checkoutUrl`, `mode`.
+- **Important Requirements:**
+  - `verifiedDiscountEgp` **must equal** backend `order.discountEgp` (never client `appliedDiscountEgp`).
+  - Backend payment verification via `POST /api/orders/{orderNumber}/verify-payment` is authoritative.
+  - Do not trust frontend calculations or redirect parameters alone.
+
+### Order Submission Requirements
+- Send a unique UUID in the `Idempotency-Key` header.
+- Reuse the same key when retrying the exact same request.
+- Generate a new key for a new purchase attempt or changed payload.
+- Include required order fields (`fashionItemId`, `variantId`, `size`, `quantity`, `customer`, `paymentMethod`, `pointsToRedeem`, `loyaltyVerificationToken`).
+- Never trust frontend prices, discounts, or points calculations.
+
+### Payment and Points Behavior
+- **COD:** Points are earned immediately; status is `pending_collection` / `confirmed`.
+- **Stripe Pending:** Points are not earned while payment is pending (`pending_payment`); redeemed points are held.
+- **Stripe Paid:** Points are awarded after successful backend verification (`paid` / `confirmed`).
+- **Stripe Cancelled / Expired:** If payment expires or is cancelled, held redeemed points are returned.
+- Handle `zero_payable_total` if Stripe is selected with no payable amount (prompt user to choose COD).
+
+### Digital Receipt Requirements
+- Save `receiptAccessToken` by order number in `localStorage` using `tys.receiptTokens`.
+- Do not store loyalty verification token.
+- Retrieve receipt using `GET /api/orders/{orderNumber}` passing `X-Receipt-Token: <receiptAccessToken>`.
+- The backend GET response returns `receiptAccessToken: null`.
+- Preserve locally stored receipt token when merging remote order data.
+- Receipt retrieval must work after page refresh and after returning from Stripe.
+- Never generate fake order numbers or fake successful receipts when backend request fails.
+
+---
+
+## Shared Team Integration Rules
+
+### 1. Backend Source of Truth
+- Use actual backend responses as the source of truth.
+- Do not invent API fields, endpoints, response values, or business rules.
+- Refer to the latest backend handoff and Swagger specification.
+- If Swagger conflicts with the confirmed latest handoff, flag the conflict and follow the confirmed handoff contract.
+
+### 2. API Configuration
+- Backend base URL: `https://clothesai3d.runasp.net`
+- Swagger: `https://clothesai3d.runasp.net/swagger`
+- Health: `GET /api/health`
+- Use the existing centralized API service architecture (`fashionApi.ts`, `commerceApi.ts`).
+- Do not hardcode backend URLs in individual components.
+
+### 3. Error Handling
+- Backend errors return `error`, `errors`, and `code`.
+- Use machine-readable `code` for application logic.
+- Handle validation, authorization, conflicts, payload limits, rate limits, provider errors, and server errors.
+- Respect `Retry-After` headers when provided.
+
+### 4. Authentication and Sensitive Data
+- Never expose secret API keys in frontend code or environment variables.
+- Never persist loyalty verification tokens (React memory only).
+- Never persist Decart temporary API keys.
+- Store receipt access tokens only in `localStorage` under `tys.receiptTokens`.
+
+### 5. Performance and Timeouts
+- The backend free tier may sleep after approximately three hours of inactivity.
+- The first request after inactivity may take 10–30 seconds.
+- Use suitable timeouts:
+  - General requests: at least 30 seconds where needed.
+  - Assistant: 55 seconds.
+  - Size scan: 60 seconds.
+- Handle loading and retry states gracefully.
+
+### 6. Team Coordination
+- Do not independently rewrite shared API services.
+- Coordinate changes to shared contexts (`CommerceContext.tsx`, `StudioContext.tsx`) and types (`types/api.ts`, `types/commerce.ts`).
+- Avoid conflicting edits to the same files.
+- Each member must document endpoints and components they integrate.
+- Test the full user journey across team boundaries before declaring a task complete.
+
+### 7. Completion Report
+Each member must provide upon completing their assignment:
+- Completed tasks.
+- Modified frontend files.
+- API endpoints integrated.
+- Remaining issues or blockers.
+- Testing evidence.
+- Confirmation that no fake/mock success behavior remains in production purchase flows.
+
+---
+
+## 12. Documentation Index
+
+- [Authoritative Backend Commerce Specification](file:///c:/Users/Gamal%202003/TryOnStudio/BACKEND_COMMERCE_SPEC.md)
+- [Reference Backend Commerce Contract](file:///c:/Users/Gamal%202003/TryOnStudio/reference/BACKEND_COMMERCE_SPEC.md)
+- [API Integration Matrix](file:///c:/Users/Gamal%202003/TryOnStudio/docs/API_INTEGRATION_MATRIX.md)
+- [Frontend Integration Audit](file:///c:/Users/Gamal%202003/TryOnStudio/docs/FRONTEND_INTEGRATION_AUDIT.md)
+- [Production Readiness Checklist](file:///c:/Users/Gamal%202003/TryOnStudio/docs/PRODUCTION_READINESS_CHECKLIST.md)
