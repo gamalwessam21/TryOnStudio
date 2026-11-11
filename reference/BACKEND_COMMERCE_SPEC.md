@@ -211,12 +211,13 @@ To prevent exposing `STRIPE_SECRET_KEY` on the client and to maintain compatibil
   "size": "L",
   "quantity": 1,
   "verifiedDiscountEgp": 50,
-  "idempotencyKey": "chk-7f91c92a-3b56"
+  "idempotencyKey": "7f91c92a-3b56-4b2a-8d19-5a1e2f3b4c5d"
 }
 ```
 
 > [!IMPORTANT]
 > `verifiedDiscountEgp` **must equal** `order.discountEgp` returned by the backend order creation endpoint. Never use client-estimated discount figures.
+> `idempotencyKey` passes the unique UUID of the checkout attempt to Stripe (no `chk-` prefix required).
 
 #### Response (`200 OK`):
 ```json
@@ -446,7 +447,7 @@ Proxies chat prompts to Google Gemini with grounding on the 15 active catalog it
 ## 8. Realtime Virtual Try-On (`/api/tryon/token`)
 
 - `POST /api/tryon/token`: Requests ephemeral WebRTC Decart client JWT (~2 minutes validity).
-- Body: `{}` (empty JSON object).
+- Body: None required (no request body needed).
 - Response: `{ "apiKey": "eyJhbGciOi...", "expiresAt": "2026-11-04T00:32:00Z" }`.
 - Model: `lucy-vton-latest`.
-- Tokens are held in memory and requested fresh prior to each connection.
+- Tokens are held in memory and requested fresh prior to each connection (never persisted).

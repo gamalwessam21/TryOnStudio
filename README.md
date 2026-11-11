@@ -327,9 +327,15 @@ The application wraps all views inside a deterministic hierarchy of context prov
 - If Stripe is selected but payable total is zero, backend handles `zero_payable_total`; user must choose COD.
 
 ### 5.8 Customer Loyalty Rewards & Verification Behavior
-- **Earning:** 1 point per 10 EGP spent on the final paid total (`Math.Floor(finalTotalEgp / 10)`).
-- **Redemption:** 100 points = 10 EGP discount (multiples of 100, up to 100% of order value).
-- **Verification:** Phone OTP challenge (`POST /api/loyalty/verify-request`, demo code `123456`) returns a verification token.
+- **Earning Rules:** 1 point per 10 EGP spent on the final paid order total (`Math.Floor(finalTotalEgp / 10)`).
+- **Points Award Timing by Payment Method:**
+  - **Cash on Delivery (COD):** Points are awarded immediately upon order creation according to the backend response (`pending_collection` / `confirmed`).
+  - **Stripe Pending:** No points are awarded yet while payment is pending (`pending_payment` / `pending`). Any points redeemed by the customer are held.
+  - **Stripe Paid:** Points are awarded only after successful backend payment verification via `POST /api/orders/{orderNumber}/verify-payment` (`paid` / `confirmed`).
+  - **Stripe Expired / Cancelled:** If payment expires or is cancelled (`cancelled`), held redeemed points are returned to the customer's balance.
+  - *Orders do not use identical points timing; earning strictly depends on payment method and verification status.*
+- **Redemption Rules:** 100 points = 10 EGP discount (multiples of 100, up to 100% of order value).
+- **Verification Flow:** Phone OTP challenge (`POST /api/loyalty/verify-request`, demo code `123456`) returns a verification token.
 - **Security Rule:** Verification token is kept **strictly in React memory only**; never saved to `localStorage`, `sessionStorage`, or cookies.
 
 ### 5.9 Digital Receipts & Tokenized Persistence
@@ -522,9 +528,10 @@ Rate limits enforced per IP per minute by the ASP.NET Core backend:
 ### 6.7 Virtual Try-On Token Endpoint
 
 #### `POST /api/tryon/token`
-- **Request Body:** `{}` (empty JSON object).
+- **Request Body:** None required (do not document or require an empty JSON object).
 - **Response (`200 OK`):** `{ "apiKey": "eyJhbGciOi...", "expiresAt": "2026-11-11T05:00:00Z" }`.
-- **Model:** Scoped for `lucy-vton-latest`. Token validity is ~2 minutes. Never persist to disk or storage.
+- **Model:** Scoped for `lucy-vton-latest`. Token validity is approximately 2 minutes.
+- **Security Rule:** Ephemeral client token for Decart WebRTC. Must **never be persisted** to disk, localStorage, or sessionStorage. Must be requested fresh before every connection or reconnection.
 
 ---
 
@@ -678,6 +685,7 @@ Rate limits enforced per IP per minute by the ASP.NET Core backend:
 
 #### `POST /api/payments/stripe` (Vercel Serverless Function)
 - **Implementation:** `api/payments/stripe.ts`.
+- **Purpose:** Initiates a hosted Stripe Checkout session while keeping `STRIPE_SECRET_KEY` secure on the server. Used by both web and mobile clients; its contract must be strictly preserved.
 - **Request Body:**
   ```json
   {
@@ -687,14 +695,17 @@ Rate limits enforced per IP per minute by the ASP.NET Core backend:
     "size": "L",
     "quantity": 1,
     "verifiedDiscountEgp": 50,
-    "idempotencyKey": "chk-uuid"
+    "idempotencyKey": "9f8b4c2e-6d1a-4f53-b827-0c1e84a2d991"
   }
   ```
-  *Crucial Rule:* `verifiedDiscountEgp` **must equal** `order.discountEgp` from the backend order creation response (never client `appliedDiscountEgp`).
+  - `verifiedDiscountEgp` **must equal** `order.discountEgp` from the backend order creation response (never client-side `appliedDiscountEgp`).
+  - `idempotencyKey` passes the purchase attempt's unique identifier to Stripe. Consistent with the backend `Idempotency-Key` header (which uses a standard UUID); do not require or enforce a `chk-` prefix unless explicitly generated. The Vercel function accepts any string up to 120 characters, defaulting to `order-${orderNumber}` if omitted.
 - **Response (`200 OK`):** `{ "sessionId": "cs_...", "checkoutUrl": "https://checkout.stripe.com/...", "mode": "sandbox" }`.
+- **Zero-Payable Handling:** If loyalty points cover 100% of the purchase (`finalTotalEgp == 0`), the helper returns `zero_payable_total` (HTTP 400). The user must select Cash on Delivery.
 
 #### `GET /api/payments/stripe` (Vercel Serverless Function)
-- **Status:** Legacy / diagnostic only. The authoritative payment verification process is handled by backend `POST /api/orders/{orderNumber}/verify-payment`.
+- **Status:** Legacy / diagnostic only. Returns `{ stripeConfigured, stripeMode, usdToEgpRate, defaultLoyaltyRules }` or inspects session status via `?sessionId=cs_...`.
+- *Note:* Authoritative payment verification must always be performed through backend `POST /api/orders/{orderNumber}/verify-payment`.
 
 ---
 
@@ -761,6 +772,11 @@ sequenceDiagram
 3. Enters demo code `123456` (`POST /api/loyalty/verify-confirm`).
 4. Receives temporary verification token stored **in React memory only**.
 5. Redeems points in multiples of 100 during checkout.
+6. **Points Timing Execution:**
+   - **Cash on Delivery (COD):** Points are awarded immediately upon order creation (`pending_collection` / `confirmed`).
+   - **Stripe Pending:** No points are awarded yet while payment is pending (`pending_payment`); redeemed points are held.
+   - **Stripe Paid:** Points are awarded only after successful backend verification (`POST /api/orders/{orderNumber}/verify-payment`).
+   - **Stripe Expired / Cancelled:** Held redeemed points are restored to the customer's balance.
 
 ---
 
@@ -935,7 +951,7 @@ The project implementation and maintenance responsibilities are divided among fi
 - Do not manually set multipart `Content-Type`.
 - Handle 422 error codes: `no_pose`, `too_close`, `turned`, `bad_height`.
 - Handle 409 when a product has no available sizes.
-- Request a fresh Decart token before every new connection or reconnection. Never persist the temporary Decart API key.
+- Request a fresh Decart token before every new connection or reconnection via `POST /api/tryon/token` (which does not require a request body). Never persist the temporary Decart API key.
 - Read assistant model dynamically from backend status rather than hardcoding.
 
 ### Assistant Integration
@@ -1059,9 +1075,10 @@ The project implementation and maintenance responsibilities are divided among fi
   - Do not trust frontend calculations or redirect parameters alone.
 
 ### Order Submission Requirements
-- Send a unique UUID in the `Idempotency-Key` header.
+- Send a unique UUID in the `Idempotency-Key` header (no `chk-` prefix required).
 - Reuse the same key when retrying the exact same request.
 - Generate a new key for a new purchase attempt or changed payload.
+- Pass the same key as `idempotencyKey` when creating a Stripe session via Vercel to preserve end-to-end checkout idempotency.
 - Include required order fields (`fashionItemId`, `variantId`, `size`, `quantity`, `customer`, `paymentMethod`, `pointsToRedeem`, `loyaltyVerificationToken`).
 - Never trust frontend prices, discounts, or points calculations.
 
