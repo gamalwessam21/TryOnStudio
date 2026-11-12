@@ -43,12 +43,19 @@ export interface SizeScanEligibility {
  */
 export function getSizeScanEligibility(
   item: FashionItemDetails | null,
-  categories?: Category[]
+  categories?: Category[],
+  lang?: 'en' | 'ar'
 ): SizeScanEligibility {
+  const isAr =
+    lang === 'ar' ||
+    (!lang && typeof document !== 'undefined' && document.documentElement.lang === 'ar');
+
   if (!item) {
     return {
       eligible: false,
-      reason: 'Select a clothing item first to check size scan support.',
+      reason: isAr
+        ? 'اختر قطعة ملابس أولاً للتحقق من دعم المسح الذكي للمقاس.'
+        : 'Select a clothing item first to check size scan support.',
     };
   }
 
@@ -61,15 +68,18 @@ export function getSizeScanEligibility(
   if (!topEligible) {
     return {
       eligible: false,
-      reason:
-        'Camera size scanning supports tops only (T-Shirts, Polo Shirts, Hoodies, and Jackets).',
+      reason: isAr
+        ? 'يدعم المسح الذكي للمقاس عبر الكاميرا القطع العلوية فقط (التيشيرتات، البولو، الهوديز، والجاكيتات).'
+        : 'Camera size scanning supports tops only (T-Shirts, Polo Shirts, Hoodies, and Jackets).',
     };
   }
 
   if (!item.availableSizes || item.availableSizes.length === 0) {
     return {
       eligible: false,
-      reason: "Sizes aren't available for this item.",
+      reason: isAr
+        ? 'المقاسات غير متاحة لهذه القطعة.'
+        : "Sizes aren't available for this item.",
     };
   }
 

@@ -66,12 +66,15 @@ export interface StudioContextValue {
   setOutfitConfirmed: (confirmed: boolean) => void;
 
   selectItem: (id: number, preferredVariantId?: number) => void;
+  clearSelection: () => void;
   selectVariant: (variant: FashionVariant) => void;
   stepGarmentOrVariant: (direction: SwipeDirection) => Promise<{
     item: FashionItemDetails;
     variant: FashionVariant;
   } | null>;
   reloadSelectedDetails: () => Promise<void>;
+  itemDetailsCache: Record<number, FashionItemDetails>;
+  ensureItemDetails: (id: number) => Promise<FashionItemDetails | null>;
 }
 
 const StudioContext = createContext<StudioContextValue | null>(null);
@@ -115,6 +118,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [detailsLoading, setDetailsLoading] = useState<boolean>(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [outfitConfirmed, setOutfitConfirmed] = useState<boolean>(false);
+  const [itemDetailsCache, setItemDetailsCache] = useState<
+    Record<number, FashionItemDetails>
+  >({});
 
   // Sequence guards to prevent stale responses
   const itemsReqSeq = useRef(0);
@@ -122,6 +128,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const detailsAbortRef = useRef<AbortController | null>(null);
   const preferredVariantRef = useRef<number | undefined>(undefined);
   const catalogItemsRef = useRef<FashionItem[]>([]);
+  const detailsCacheRef = useRef<Record<number, FashionItemDetails | undefined>>({});
+  const inflightDetailsRef = useRef<
+    Record<number, Promise<FashionItemDetails | null> | undefined>
+  >({});
 
   // Debounce search input
   useEffect(() => {
@@ -182,7 +192,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setRackLoading(true);
     setRackError(null);
     try {
-      const data = await fashionApi.getRackItems(8);
+      const data = await fashionApi.getRackItems(20);
       setRackItems(data);
     } catch (err) {
       setRackError(
@@ -293,6 +303,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         setSelectedItemDetails(normalizedDetails);
         setSelectedVariant(chosenVariant);
         setItemSizes(mergedSizes);
+        detailsCacheRef.current[id] = normalizedDetails;
+        setItemDetailsCache((prev) =>
+          prev[id] === normalizedDetails
+            ? prev
+            : { ...prev, [id]: normalizedDetails }
+        );
 
         if (chosenVariant) {
           return { item: normalizedDetails, variant: chosenVariant };
@@ -340,6 +356,60 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setSelectedCategoryIdState(id);
   }, []);
 
+  const ensureItemDetails = useCallback(
+    async (id: number): Promise<FashionItemDetails | null> => {
+      const cached = detailsCacheRef.current[id];
+      if (cached) {
+        return cached;
+      }
+      const inflight = inflightDetailsRef.current[id];
+      if (inflight) {
+        return inflight;
+      }
+      const promise = (async () => {
+        try {
+          const [details, explicitVariants, explicitSizes] = await Promise.all([
+            fashionApi.getFashionItemDetails(id),
+            fashionApi.getFashionItemVariants(id).catch(() => null),
+            fashionApi.getItemSizes(id).catch(() => null),
+          ]);
+          const mergedVariants =
+            details.variants && details.variants.length > 0
+              ? details.variants
+              : explicitVariants ?? [];
+          const mergedSizes =
+            explicitSizes !== null
+              ? explicitSizes
+              : details.availableSizes ?? [];
+          const matchingCatalogItem = catalogItemsRef.current.find(
+            (i) => i.id === id
+          );
+          const resolvedThumbnailUrl =
+            details.thumbnailUrl ??
+            matchingCatalogItem?.thumbnailUrl ??
+            mergedVariants[0]?.imageUrl ??
+            null;
+          const normalizedDetails: FashionItemDetails = {
+            ...details,
+            thumbnailUrl: resolvedThumbnailUrl,
+            variants: mergedVariants,
+            availableSizes: mergedSizes,
+          };
+          detailsCacheRef.current[id] = normalizedDetails;
+          setItemDetailsCache((prev) => ({ ...prev, [id]: normalizedDetails }));
+          return normalizedDetails;
+        } catch {
+          return null;
+        } finally {
+          delete inflightDetailsRef.current[id];
+        }
+      })();
+      inflightDetailsRef.current[id] = promise;
+      return promise;
+    },
+    []
+  );
+
   const selectItem = useCallback(
     (id: number, preferredVariantId?: number) => {
       preferredVariantRef.current = preferredVariantId;
@@ -355,6 +425,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     },
     [searchParams, setSearchParams]
   );
+
+  const clearSelection = useCallback(() => {
+    detailsAbortRef.current?.abort();
+    setOutfitConfirmed(false);
+    setSelectedItemId(null);
+    setSelectedItemDetails(null);
+    setSelectedVariant(null);
+    setItemSizes([]);
+    setDetailsError(null);
+    if (searchParams.has('item')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('item');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const selectVariant = useCallback((variant: FashionVariant) => {
     setOutfitConfirmed(false);
@@ -465,9 +550,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       outfitConfirmed,
       setOutfitConfirmed,
       selectItem,
+      clearSelection,
       selectVariant,
       stepGarmentOrVariant,
       reloadSelectedDetails,
+      itemDetailsCache,
+      ensureItemDetails,
     }),
     [
       health,
@@ -498,9 +586,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       detailsError,
       outfitConfirmed,
       selectItem,
+      clearSelection,
       selectVariant,
       stepGarmentOrVariant,
       reloadSelectedDetails,
+      itemDetailsCache,
+      ensureItemDetails,
     ]
   );
 

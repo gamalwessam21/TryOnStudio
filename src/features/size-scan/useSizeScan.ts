@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { captureFrames } from '../../services/captureFrames';
 import { fashionApi, formatSizeScanError } from '../../services/fashionApi';
 import type { SizeScanResult } from '../../types/api';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export type SizeScanPhase =
   | 'idle'
@@ -41,6 +42,7 @@ const TARGET_FRAMES = 20;
 const CAPTURE_DURATION_MS = 3000;
 
 export function useSizeScan(): UseSizeScanResult {
+  const { language } = useLanguage();
   const [phase, setPhase] = useState<SizeScanPhase>('idle');
   const [countdownSeconds, setCountdownSeconds] = useState<number>(0);
   const [countdownTotal, setCountdownTotal] = useState<number>(3);
@@ -89,9 +91,12 @@ export function useSizeScan(): UseSizeScanResult {
 
       if (!cameraVideo || cameraVideo.readyState < 2 || !cameraVideo.videoWidth) {
         setScanError({
-          title: 'Camera Not Active',
+          title:
+            language === 'ar' ? 'الكاميرا غير مفعلة' : 'Camera Not Active',
           message:
-            'Turn on your camera and wait for the live preview before starting a size scan.',
+            language === 'ar'
+              ? 'شغّل الكاميرا وانتظر ظهور المعاينة المباشرة قبل بدء مسح المقاس.'
+              : 'Turn on your camera and wait for the live preview before starting a size scan.',
         });
         setPhase('error');
         return;
@@ -166,14 +171,14 @@ export function useSizeScan(): UseSizeScanResult {
           setPhase('idle');
           return;
         }
-        setScanError(formatSizeScanError(err));
+        setScanError(formatSizeScanError(err, language));
         setPhase('error');
       } finally {
         clearTimers();
         activeRunRef.current = false;
       }
     },
-    [clearTimers]
+    [clearTimers, language]
   );
 
   useEffect(() => {

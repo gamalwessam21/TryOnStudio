@@ -61,28 +61,39 @@ All ASP.NET Core backend endpoints return a standardized JSON error format:
 
 ## 3. Orders & Commerce Controller (`OrdersController.cs`)
 
-### 3.1 Single-Product Order Constraint
+### 3.1 Multi-Product Order Architecture (`items[]`)
 > [!IMPORTANT]
-> The backend order endpoint supports **exactly one clothing item per order**. It does **not** accept an array of multi-product items.
-> All client carts and checkout workflows must operate under this constraint. Multi-item cart checkouts must not submit fake combined orders without a future backend contract revision.
+> The backend order endpoint accepts **1 to 20 line items per order** via the `items` array (`CreateOrderItemRequest[]`), with each line item having `quantity` between `1` and `20`.
+> Top-level single-item fields (`fashionItemId`, `variantId`, `size`, `quantity`) are deprecated and must **not** be sent alongside `items[]` (sending both triggers `400 ambiguous_items`).
+> On the frontend, the multi-product shopping cart is persisted in `localStorage` under `tys.cart`, while **Buy Now** uses an isolated `checkoutDraft` (`checkoutMode = 'buy_now'`) that never overwrites or clears `tys.cart`.
 
 ---
 
 ### 3.2 Create Order: `POST /api/orders`
 
-Creates a new purchase order, performs authoritative server-side price calculation, validates stock and sizing, checks loyalty tokens if points are redeemed, and holds or confirms the order.
+Creates a new purchase order, performs authoritative server-side price calculation across all line items, validates sizing, checks loyalty tokens if points are redeemed, and holds or confirms the order.
 
 #### Required HTTP Headers:
 - `Content-Type: application/json`
-- `Idempotency-Key: <UUID>` (Generates a unique UUID v4 per checkout attempt; reuses the same key ONLY when retrying identical network failures).
+- `Idempotency-Key: <UUID>` (Generates a unique UUID v4 per checkout attempt; reuses the same key ONLY when retrying identical network failures; regenerates whenever items, quantities, customer fields, payment method, or redeemed points change).
 
 #### Request Body (`CreateOrderPayload`):
 ```json
 {
-  "fashionItemId": 1,
-  "variantId": 1,
-  "size": "L",
-  "quantity": 1,
+  "items": [
+    {
+      "fashionItemId": 1,
+      "variantId": 1,
+      "size": "L",
+      "quantity": 2
+    },
+    {
+      "fashionItemId": 2,
+      "variantId": 4,
+      "size": "M",
+      "quantity": 1
+    }
+  ],
   "customer": {
     "fullName": "Mohamed Gamal",
     "phone": "01012345678"
@@ -94,24 +105,25 @@ Creates a new purchase order, performs authoritative server-side price calculati
 ```
 
 #### Field Specifications:
-- `fashionItemId` (number, required): Authoritative integer ID from the catalog.
-- `variantId` (number, optional): Authoritative integer variant/color ID.
-- `size` (string or `null`, optional): Selected manufactured size. Must be `null` if the product has no sizes (`availableSizes` is empty).
-- `quantity` (number, required): Integer between 1 and 20.
+- `items` (array, required): 1 to 20 line items (`items_required` if empty, `too_many_items` if > 20).
+  - `fashionItemId` (number, required): Authoritative integer ID from the catalog.
+  - `variantId` (number, optional): Authoritative integer variant/color ID.
+  - `size` (string or `null`, optional): Selected manufactured size. Must be `null` if the product has no sizes (`availableSizes` is empty).
+  - `quantity` (number, required): Integer between 1 and 20 (`invalid_quantity` if outside 1–20).
 - `customer.fullName` (string, required): 3 to 100 characters.
-- `customer.phone` (string, required): Valid phone number (10–15 digits).
+- `customer.phone` (string, required): Valid phone number (7–20 digits).
 - `paymentMethod` (string, required): `"cod"` (Cash on Delivery) or `"stripe"`.
 - `pointsToRedeem` (number, optional): Integer in multiples of 100. Default 0.
 - `loyaltyVerificationToken` (string, optional): Required if `pointsToRedeem > 0`. Must match the customer phone number.
 
 #### Authoritative Server Pricing Calculations:
 The backend does **not** trust client prices, subtotals, or discounts:
-1. `unitPriceUsd` is retrieved from the database.
-2. `unitPriceEgp = Math.Round(unitPriceUsd * 50)`.
-3. `subtotalEgp = unitPriceEgp * quantity`.
+1. For each item in `items[]`, `unitPriceUsd` is retrieved from the database.
+2. `unitPriceEgp = Math.Round(unitPriceUsd * 50)` and `lineTotalEgp = unitPriceEgp * quantity`.
+3. `subtotalEgp = Sum(lineTotalEgp)`.
 4. If `pointsToRedeem > 0`, backend validates token and balance: `discountEgp = (pointsToRedeem / 100) * 10`.
 5. `finalTotalEgp = Math.Max(0, subtotalEgp - discountEgp)`.
-6. `pointsEarned`: For COD, calculated immediately as `Math.Floor(finalTotalEgp / 10) * 1`. For Stripe, earned upon successful payment verification.
+6. `pointsEarned`: For COD, calculated immediately as `Math.Floor(finalTotalEgp / 10) * 1`. For Stripe, `0` while pending and earned only upon successful payment verification.
 
 #### Success Response (`201 Created` - `PersistedOrder`):
 ```json
@@ -198,26 +210,23 @@ Notifies the backend to verify and record a completed Stripe Checkout session.
 
 ## 4. Stripe Checkout Session Gateway (Vercel Serverless Function)
 
-To prevent exposing `STRIPE_SECRET_KEY` on the client and to maintain compatibility with both web and mobile apps, Stripe session creation is hosted via Vercel serverless functions.
+When `POST /api/orders` is called with `paymentMethod: "stripe"`, if the backend returns `checkoutUrl`, the frontend redirects directly to it. Otherwise, to prevent exposing `STRIPE_SECRET_KEY` on the client and to support multi-item orders securely, Stripe session creation is handled by the Vercel serverless helper `POST /api/payments/stripe`.
 
 ### 4.1 Create Stripe Session: `POST /api/payments/stripe`
 
-#### Request Body:
+#### Primary Multi-Item Request Body (Authoritative Order Fetch):
 ```json
 {
-  "orderNumber": "TYS-20261104-8921",
-  "fashionItemId": 1,
-  "variantId": 1,
-  "size": "L",
-  "quantity": 1,
-  "verifiedDiscountEgp": 50,
+  "orderNumber": "TYS-20261112-50910",
+  "receiptAccessToken": "rcpt_sec_9942a8b3e",
   "idempotencyKey": "7f91c92a-3b56-4b2a-8d19-5a1e2f3b4c5d"
 }
 ```
 
 > [!IMPORTANT]
-> `verifiedDiscountEgp` **must equal** `order.discountEgp` returned by the backend order creation endpoint. Never use client-estimated discount figures.
-> `idempotencyKey` passes the unique UUID of the checkout attempt to Stripe (no `chk-` prefix required).
+> **Server-Side Payment Integrity:**
+> When `orderNumber` and `receiptAccessToken` are provided, `api/payments/stripe.ts` fetches the authoritative `OrderDto` directly from `GET https://clothesai3d.runasp.net/api/orders/{orderNumber}` using `X-Receipt-Token`, verifies that `paymentMethod === "stripe"` and the order is not already `paid` or `cancelled`, and computes the Stripe charge exclusively from the backend's `finalTotalEgp * 100` piastres. It never trusts frontend prices, quantities, or discounts.
+> Legacy single-item fields (`fashionItemId`, `variantId`, `size`, `quantity`, `verifiedDiscountEgp`) remain supported as a fallback for external callers.
 
 #### Response (`200 OK`):
 ```json

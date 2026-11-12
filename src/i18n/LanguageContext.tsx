@@ -9,7 +9,8 @@ import {
 } from 'react';
 import type { AppLanguage } from '../types/commerce';
 
-const LANG_STORAGE_KEY = 'tryonstudio_ui_lang';
+const LANG_STORAGE_KEY = 'tys_lang';
+const LEGACY_LANG_STORAGE_KEY = 'tryonstudio_ui_lang';
 
 const DICTIONARY = {
   en: {
@@ -21,6 +22,7 @@ const DICTIONARY = {
     navSizeGuide: 'Find My Size',
     navAssistant: 'AI Stylist',
     navLoyalty: 'Loyalty Rewards',
+    navCart: 'Shopping Cart',
     navCheckout: 'Checkout',
     navHowItWorks: 'How It Works',
     searchPlaceholder: 'Search clothing items by name or description...',
@@ -29,6 +31,12 @@ const DICTIONARY = {
     apiOffline: 'API Unreachable',
     openStylistBtn: 'Ask AI Stylist',
     buyNow: 'Buy Now',
+    addToCart: 'Add to Cart',
+    addedToCart: 'Added to Cart',
+    viewDetailsBtn: 'Details',
+    viewCartBtn: 'View Cart',
+    clearSelectionBtn: 'Deselect Outfit',
+    undoOutfitConfirm: 'Undo Confirmation',
     proceedToCheckout: 'Proceed to Checkout',
     selectSizeFirst: 'Select a size below to purchase:',
     tryOn: 'Studio Try-On',
@@ -301,7 +309,7 @@ const DICTIONARY = {
     paymentMethodTitle: 'Payment Method',
     codTitle: 'Cash on Delivery (COD)',
     codDesc:
-      'Pay in cash when your order arrives. Points are awarded once delivery & payment are confirmed.',
+      'Pay in cash when your order arrives. Loyalty points are awarded immediately upon order creation.',
     stripeTitle: 'Online Card Payment (Stripe Hosted Checkout)',
     stripeDesc:
       'Redirect securely to Stripe Hosted Checkout. Card numbers and CVVs never touch TryOnStudio.',
@@ -348,6 +356,18 @@ const DICTIONARY = {
     paymentStatusLabel: 'Payment Status',
     orderConfirmedNotice:
       'Thank you! Your order has been registered and is being processed by our warehouse.',
+
+    // Shopping Cart & Product Details Modal
+    cartTitle: 'Shopping Cart',
+    cartSubtitle: 'Review your selected items, adjust colors, sizes, or quantities (1–20 per line), and proceed to checkout.',
+    cartEmptyTitle: 'Your shopping cart is empty',
+    cartEmptyDesc: 'Browse the clothing collection or try on outfits in the Studio to add items to your cart.',
+    clearCartBtn: 'Clear Cart',
+    removeItemBtn: 'Remove',
+    quantityLabel: 'Quantity',
+    lineTotalLabel: 'Line Total',
+    productDetailsTitle: 'Product Specifications & Options',
+    closeModalBtn: 'Close',
   },
   ar: {
     // Brand & Header
@@ -358,6 +378,7 @@ const DICTIONARY = {
     navSizeGuide: 'اعرف مقاسي',
     navAssistant: 'مساعد الأناقة الذكي',
     navLoyalty: 'نقاط الولاء والمكافآت',
+    navCart: 'سلة التسوق',
     navCheckout: 'إتمام الشراء',
     navHowItWorks: 'كيف يعمل التطبيق',
     searchPlaceholder: 'ابحث عن الملابس بالاسم أو الوصف...',
@@ -366,6 +387,12 @@ const DICTIONARY = {
     apiOffline: 'الخادم غير متصل',
     openStylistBtn: 'اسأل مساعد الأناقة',
     buyNow: 'اشترِ الآن',
+    addToCart: 'أضف إلى السلة',
+    addedToCart: 'تمت الإضافة للسلة',
+    viewDetailsBtn: 'التفاصيل',
+    viewCartBtn: 'عرض السلة',
+    clearSelectionBtn: 'إلغاء اختيار القطعة',
+    undoOutfitConfirm: 'إلغاء التأكيد',
     proceedToCheckout: 'المتابعة لإتمام الشراء',
     selectSizeFirst: 'اختر المقاس أولاً للشراء:',
     tryOn: 'قياس افتراضي',
@@ -638,7 +665,7 @@ const DICTIONARY = {
     paymentMethodTitle: 'طريقة الدفع',
     codTitle: 'الدفع عند الاستلام (COD)',
     codDesc:
-      'ادفع نقداً عند استلام طلبك. تُضاف نقاط الولاء بعد تأكيد التسليم والتحصيل.',
+      'ادفع نقداً عند استلام طلبك. تُضاف نقاط الولاء فوراً بمجرد تأكيد إنشاء الطلب.',
     stripeTitle: 'الدفع الإلكتروني بالبطاقة (بوابة Stripe الآمنة)',
     stripeDesc:
       'انتقال آمن إلى صفحة الدفع المستضافة من Stripe دون تخزين أي بيانات بطاقة داخل التطبيق.',
@@ -685,6 +712,18 @@ const DICTIONARY = {
     paymentStatusLabel: 'حالة الدفع',
     orderConfirmedNotice:
       'شكراً لك! تم تسجيل طلبك بنجاح وجاري تجهيزه من قِبل المستودع.',
+
+    // Shopping Cart & Product Details Modal
+    cartTitle: 'سلة التسوق',
+    cartSubtitle: 'راجع المنتجات المختارة، وعدّل الألوان أو المقاسات أو الكميات (1–20 لكل سطر)، ثم تابع لإتمام الشراء.',
+    cartEmptyTitle: 'سلة التسوق فارغة حالياً',
+    cartEmptyDesc: 'تصفح تشكيلة الملابس أو جرّب القطع في الاستوديو لإضافة منتجات إلى سلتك.',
+    clearCartBtn: 'إفراغ السلة',
+    removeItemBtn: 'حذف',
+    quantityLabel: 'الكمية',
+    lineTotalLabel: 'إجمالي السطر',
+    productDetailsTitle: 'تفاصيل ومواصفات القطعة',
+    closeModalBtn: 'إغلاق',
   },
 } as const;
 
@@ -702,7 +741,9 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 function readInitialLanguage(): AppLanguage {
   try {
-    const saved = window.localStorage.getItem(LANG_STORAGE_KEY);
+    const saved =
+      window.localStorage.getItem(LANG_STORAGE_KEY) ||
+      window.localStorage.getItem(LEGACY_LANG_STORAGE_KEY);
     if (saved === 'ar' || saved === 'en') return saved;
   } catch {
     // Ignore storage access issues
@@ -727,6 +768,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
     try {
       window.localStorage.setItem(LANG_STORAGE_KEY, language);
+      window.localStorage.setItem(LEGACY_LANG_STORAGE_KEY, language);
     } catch {
       // Ignore storage access issues
     }

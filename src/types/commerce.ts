@@ -132,8 +132,28 @@ export interface CheckoutDraftItem {
   imageUrl: string | null;
   size: string | null;
   availableSizes: string[];
+  variants?: Array<{
+    id: number;
+    colorName: string;
+    colorHex: string;
+    imageUrl: string;
+  }>;
   quantity: number;
   unitPriceUsd: number;
+}
+
+export interface CartItem extends CheckoutDraftItem {
+  lineKey: string;
+}
+
+export type CheckoutMode = 'cart' | 'buy_now';
+
+export interface CartActionResult {
+  ok: boolean;
+  merged?: boolean;
+  quantity?: number;
+  code?: 'max_quantity_exceeded' | 'max_lines_exceeded' | 'invalid_item';
+  message?: string;
 }
 
 export interface CustomerFormValues {
@@ -141,11 +161,15 @@ export interface CustomerFormValues {
   phone: string;
 }
 
-export interface CreateOrderPayload {
+export interface CreateOrderItemPayload {
   fashionItemId: number;
   variantId: number | null;
   size: string | null;
   quantity: number;
+}
+
+export interface CreateOrderPayload {
+  items: CreateOrderItemPayload[];
   customer: {
     fullName: string;
     phone: string;
@@ -153,6 +177,18 @@ export interface CreateOrderPayload {
   paymentMethod: PaymentMethodType;
   pointsToRedeem?: number;
   loyaltyVerificationToken?: string | null;
+}
+
+export interface CreateStripeSessionRequest {
+  orderNumber: string;
+  receiptAccessToken?: string | null;
+  idempotencyKey: string;
+  // Legacy single-item fallback fields for external/mobile callers
+  fashionItemId?: number;
+  variantId?: number | null;
+  size?: string | null;
+  quantity?: number;
+  verifiedDiscountEgp?: number;
 }
 
 export interface PersistedOrderItem {

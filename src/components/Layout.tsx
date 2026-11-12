@@ -11,6 +11,7 @@ import {
   Search,
   Shirt,
   ShoppingBag,
+  ShoppingCart,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { useStudio } from '../app/StudioContext';
 import { useCommerce } from '../app/CommerceContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import { AssistantFloatingDrawer } from '../features/assistant/AssistantFloatingDrawer';
+import { CartDrawer } from '../features/cart/CartDrawer';
 
 export function Layout() {
   const {
@@ -27,7 +29,12 @@ export function Layout() {
     healthState,
     refreshHealth,
   } = useStudio();
-  const { checkoutDraft } = useCommerce();
+  const {
+    checkoutDraft,
+    cartCheckoutReady,
+    cartTotalQuantity,
+    setCartDrawerOpen,
+  } = useCommerce();
   const { language, setLanguage, t } = useLanguage();
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -150,6 +157,24 @@ export function Layout() {
             </NavLink>
 
             <NavLink
+              to="/cart"
+              className={({ isActive }) =>
+                `sidebar-nav-link ${isActive ? 'active' : ''}`
+              }
+            >
+              <ShoppingCart size={18} aria-hidden="true" />
+              <span>{t('navCart')}</span>
+              {cartTotalQuantity > 0 && (
+                <span
+                  className="nav-badge"
+                  aria-label={`${cartTotalQuantity} items in cart`}
+                >
+                  <bdi>{cartTotalQuantity}</bdi>
+                </span>
+              )}
+            </NavLink>
+
+            <NavLink
               to="/checkout"
               className={({ isActive }) =>
                 `sidebar-nav-link ${isActive ? 'active' : ''}`
@@ -157,9 +182,13 @@ export function Layout() {
             >
               <ShoppingBag size={18} aria-hidden="true" />
               <span>{t('navCheckout')}</span>
-              {checkoutDraft && (
-                <span className="nav-badge" aria-label="1 item in checkout">
-                  1
+              {((cartCheckoutReady && cartTotalQuantity > 0) || checkoutDraft) && (
+                <span className="nav-badge" aria-label="Items ready for checkout">
+                  <bdi>
+                    {cartCheckoutReady && cartTotalQuantity > 0
+                      ? cartTotalQuantity
+                      : checkoutDraft?.quantity ?? 1}
+                  </bdi>
                 </span>
               )}
             </NavLink>
@@ -236,6 +265,30 @@ export function Layout() {
             <button
               type="button"
               className="lang-switcher-btn"
+              onClick={() => setCartDrawerOpen(true)}
+              aria-label={`${t('navCart')} (${cartTotalQuantity})`}
+              title={t('navCart')}
+              style={{ position: 'relative' }}
+            >
+              <ShoppingCart size={15} aria-hidden="true" />
+              <span>{t('navCart')}</span>
+              {cartTotalQuantity > 0 && (
+                <span
+                  className="nav-badge"
+                  style={{
+                    marginInlineStart: 4,
+                    padding: '1px 6px',
+                    fontSize: '0.72rem',
+                  }}
+                >
+                  <bdi>{cartTotalQuantity}</bdi>
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="lang-switcher-btn"
               onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
               aria-label={
                 language === 'en'
@@ -291,6 +344,7 @@ export function Layout() {
         </main>
       </div>
 
+      <CartDrawer />
       <AssistantFloatingDrawer />
     </div>
   );

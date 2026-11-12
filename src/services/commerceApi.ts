@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiError } from './fashionApi';
+import { API_BASE_URL, ApiError, parseRetryAfterHeader } from './fashionApi';
 import type { ApiErrorPayload } from '../types/api';
 import type {
   AppLanguage,
@@ -6,6 +6,7 @@ import type {
   AssistantContextSnapshot,
   AssistantStatusResponse,
   CreateOrderPayload,
+  CreateStripeSessionRequest,
   LoyaltyAccountSummary,
   LoyaltyRules,
   LoyaltyVerifyConfirmResponse,
@@ -43,7 +44,7 @@ async function jsonRequest<T>(
     method = 'GET',
     body,
     headers: customHeaders = {},
-    timeoutMs = 26_000,
+    timeoutMs = 30_000,
     signal: externalSignal,
   } = options;
 
@@ -113,11 +114,15 @@ async function jsonRequest<T>(
         errData.error?.trim() ||
         validationMsg ||
         `Request failed with status ${res.status}.`;
+      const retryAfter = parseRetryAfterHeader(
+        res.headers.get('retry-after')
+      );
       throw new ApiError(
         serverMsg,
         res.status,
         errData.code ?? null,
-        errData.errors ?? null
+        errData.errors ?? null,
+        retryAfter
       );
     }
 
@@ -155,14 +160,14 @@ export const commerceApi = {
    */
   getAssistantStatus(signal?: AbortSignal): Promise<AssistantStatusResponse> {
     return jsonRequest<AssistantStatusResponse>('/api/assistant/chat', {
-      baseUrl: '',
+      baseUrl: COMMERCE_API_BASE_URL,
       signal,
     });
   },
 
   /**
-   * Sends session chat history + safe garment/catalog context to the server-side
-   * Google Gemini endpoint (/api/assistant/chat).
+   * Sends session chat history + safe garment/catalog context to the authoritative
+   * backend Google Gemini endpoint (/api/assistant/chat).
    */
   sendAssistantMessage(
     params: {
@@ -173,10 +178,10 @@ export const commerceApi = {
     signal?: AbortSignal
   ): Promise<AssistantChatResponse> {
     return jsonRequest<AssistantChatResponse>('/api/assistant/chat', {
-      baseUrl: '',
+      baseUrl: COMMERCE_API_BASE_URL,
       method: 'POST',
       body: params,
-      timeoutMs: 32_000,
+      timeoutMs: 55_000,
       signal,
     });
   },
@@ -211,15 +216,7 @@ export const commerceApi = {
    * Creates a hosted Stripe Checkout session for an already-persisted backend order.
    */
   createStripeCheckoutSession(
-    params: {
-      orderNumber: string;
-      fashionItemId: number;
-      variantId: number | null;
-      size: string | null;
-      quantity: number;
-      verifiedDiscountEgp: number;
-      idempotencyKey: string;
-    },
+    params: CreateStripeSessionRequest,
     signal?: AbortSignal
   ): Promise<{ sessionId: string; checkoutUrl: string; mode: string }> {
     return jsonRequest<{ sessionId: string; checkoutUrl: string; mode: string }>(

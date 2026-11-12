@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useStudio } from '../StudioContext';
+import { useCommerce } from '../CommerceContext';
 import { useCamera } from '../../hooks/useCamera';
 import { useDecartTryOn } from '../../features/tryon/useDecartTryOn';
 import { useGestureNavigation } from '../../features/tryon/useGestureNavigation';
@@ -36,10 +37,16 @@ export function StudioPage() {
     outfitConfirmed,
     setOutfitConfirmed,
     selectItem,
+    clearSelection,
     selectVariant,
     stepGarmentOrVariant,
     reloadSelectedDetails,
   } = useStudio();
+  const {
+    setLatestScannedSize,
+    setSelectedPurchaseSize,
+    setTryOnActiveState,
+  } = useCommerce();
 
   const tryOn = useDecartTryOn();
   const sizeScan = useSizeScan();
@@ -48,11 +55,39 @@ export function StudioPage() {
   const handleCameraStopped = useCallback(() => {
     tryOn.disconnectTryOn();
     sizeScan.cancelSizeScan();
-  }, [tryOn, sizeScan]);
+    setTryOnActiveState(false);
+  }, [tryOn, sizeScan, setTryOnActiveState]);
 
   const camera = useCamera(handleCameraStopped);
 
   const isTryOnStreaming = tryOn.isConnected && tryOn.hasRemoteStream;
+
+  useEffect(() => {
+    setTryOnActiveState(isTryOnStreaming);
+  }, [isTryOnStreaming, setTryOnActiveState]);
+
+  useEffect(() => {
+    if (!sizeScan.scanResult) return;
+    const displaySize =
+      sizeScan.scanResult.borderline && sizeScan.scanResult.sizeRange
+        ? sizeScan.scanResult.sizeRange
+        : sizeScan.scanResult.size;
+    if (displaySize) {
+      setLatestScannedSize(displaySize);
+    }
+    const exactSize = sizeScan.scanResult.size;
+    if (
+      exactSize &&
+      selectedItemDetails?.availableSizes?.includes(exactSize)
+    ) {
+      setSelectedPurchaseSize(exactSize);
+    }
+  }, [
+    sizeScan.scanResult,
+    selectedItemDetails,
+    setLatestScannedSize,
+    setSelectedPurchaseSize,
+  ]);
 
   // Sync manual catalog/variant changes into an active Decart session without restarting camera
   useEffect(() => {
@@ -115,9 +150,19 @@ export function StudioPage() {
   ]);
 
   const handleChooseOutfit = useCallback(() => {
+    if (tryOn.isConnected || tryOn.isBusy) {
+      tryOn.disconnectTryOn();
+      setOutfitConfirmed(true);
+      return;
+    }
+    setOutfitConfirmed(!outfitConfirmed);
+  }, [tryOn, outfitConfirmed, setOutfitConfirmed]);
+
+  const handleClearSelection = useCallback(() => {
     tryOn.disconnectTryOn();
-    setOutfitConfirmed(true);
-  }, [tryOn, setOutfitConfirmed]);
+    sizeScan.resetSizeScan();
+    clearSelection();
+  }, [tryOn, sizeScan, clearSelection]);
 
   const handleTriggerSizeScan = useCallback(
     async (countdownSec: number) => {
@@ -244,6 +289,7 @@ export function StudioPage() {
           tryOnActive={isTryOnStreaming}
           onSelectVariant={selectVariant}
           onChooseOutfit={handleChooseOutfit}
+          onClearSelection={handleClearSelection}
           onRetry={() => void reloadSelectedDetails()}
         />
 

@@ -314,17 +314,21 @@ The application wraps all views inside a deterministic hierarchy of context prov
 - **Result:** Returns recommended size, alternative size, confidence score, and `borderline` flag.
 - **Display Rule:** When `borderline: true`, the UI displays `sizeRange` (e.g. "Between M and L"). When `false`, displays `size`.
 
-### 5.6 Single-Product Checkout & Idempotency
-- **Single-Product Constraint:** The authoritative backend creates orders for **exactly one clothing item**. Multi-item cart checkout is constrained to single-product checkout.
-- **Idempotency:** Generates a unique UUID in the `Idempotency-Key` header to prevent duplicate orders during retries.
-- **Server Pricing:** Backend recalculates prices; client prices and totals are previews only and are never trusted as authoritative.
+### 5.6 Multi-Product Cart, Buy Now Isolation & Idempotent Checkout
+- **Multi-Product Order Support (`items[]`):** The authoritative backend supports **1 to 20 line items per order** (`items[]`), with each line item supporting a quantity of `1` to `20`.
+- **Persisted Shopping Cart (`tys.cart`):** Cart lines are keyed by `fashionItemId + variantId + size`, merged automatically when identical configurations are added, and validated against live catalog details on load. Quantities exceeding 20 are never silently truncated; the UI informs the customer and lets them adjust.
+- **Buy Now Isolation:** Selecting **Buy Now** sets `checkoutMode = 'buy_now'` and populates an isolated `checkoutDraft` without overwriting, clearing, or silently merging the customer's saved `tys.cart`.
+- **Idempotency:** Generates a unique UUID in the `Idempotency-Key` header (`crypto.randomUUID()`), reusing the same key only when retrying the exact same payload and regenerating whenever items, quantities, customer fields, payment method, or redeemed points change.
+- **Server Pricing:** Backend recalculates all line prices and discounts; client prices and totals are previews only and are never trusted as authoritative.
 - **Inventory/Stock Rule:** Sizing availability from the backend indicates manufacturability, not inventory stock availability.
 
-### 5.7 Stripe Payments & Backend Payment Verification
-- Stripe Checkout session created via Vercel helper `POST /api/payments/stripe`.
-- Payment verified on return via backend `POST /api/orders/{orderNumber}/verify-payment` using `{ "sessionId": "..." }`.
-- Backend marks order as `paid` and awards loyalty points.
-- If Stripe is selected but payable total is zero, backend handles `zero_payable_total`; user must choose COD.
+### 5.7 Hybrid Stripe Payments & Backend Payment Verification
+- **Step 1:** Order is created first via `POST /api/orders` with `items[]`, and `receiptAccessToken` is immediately saved in `localStorage` under `tys.receiptTokens`.
+- **Step 2:** If `createdOrder.checkoutUrl` is returned by the backend, the frontend redirects directly to it.
+- **Step 3:** Otherwise, the frontend calls the Vercel helper `POST /api/payments/stripe` passing `{ orderNumber, receiptAccessToken, idempotencyKey }`. The serverless function fetches the authoritative `OrderDto` from `GET /api/orders/{orderNumber}` with `X-Receipt-Token`, verifies that the order is eligible for Stripe payment, and creates one Stripe Checkout session charging `finalTotalEgp * 100` piastres.
+- **Step 4 (Safe Retry):** If Stripe session creation fails after the order is created, the created order and `receiptAccessToken` are preserved so the customer can safely retry Stripe payment for that same `orderNumber` without creating a duplicate order.
+- **Step 5 (Verification):** On return from Stripe, payment is verified via backend `POST /api/orders/{orderNumber}/verify-payment` using `{ "sessionId": "..." }`, which transitions the order to `paid` / `confirmed` and awards loyalty points.
+- If Stripe is selected but payable total is zero, the backend/helper rejects with `zero_payable_total` and prompts the customer to choose Cash on Delivery or reduce redeemed points.
 
 ### 5.8 Customer Loyalty Rewards & Verification Behavior
 - **Earning Rules:** 1 point per 10 EGP spent on the final paid order total (`Math.Floor(finalTotalEgp / 10)`).
@@ -594,14 +598,18 @@ Rate limits enforced per IP per minute by the ASP.NET Core backend:
 
 #### `POST /api/orders`
 - **Headers:** `Content-Type: application/json`, `Idempotency-Key: <UUID>`.
-- **Constraint:** Single clothing product per order only.
+- **Multi-Product Contract:** Accepts `items[]` (1 to 20 line items per order, quantity 1 to 20 per line). Top-level single-item fields are deprecated and must not be sent alongside `items[]`.
 - **Request Body (`CreateOrderPayload`):**
   ```json
   {
-    "fashionItemId": 1,
-    "variantId": 1,
-    "size": "L",
-    "quantity": 1,
+    "items": [
+      {
+        "fashionItemId": 1,
+        "variantId": 1,
+        "size": "L",
+        "quantity": 1
+      }
+    ],
     "customer": {
       "fullName": "Mohamed Gamal",
       "phone": "01012345678"
@@ -685,21 +693,18 @@ Rate limits enforced per IP per minute by the ASP.NET Core backend:
 
 #### `POST /api/payments/stripe` (Vercel Serverless Function)
 - **Implementation:** `api/payments/stripe.ts`.
-- **Purpose:** Initiates a hosted Stripe Checkout session while keeping `STRIPE_SECRET_KEY` secure on the server. Used by both web and mobile clients; its contract must be strictly preserved.
-- **Request Body:**
+- **Purpose:** Initiates a hosted Stripe Checkout session while keeping `STRIPE_SECRET_KEY` secure on the server.
+- **Primary Multi-Product Request Body:**
   ```json
   {
-    "orderNumber": "TYS-20261111-8921",
-    "fashionItemId": 1,
-    "variantId": 1,
-    "size": "L",
-    "quantity": 1,
-    "verifiedDiscountEgp": 50,
+    "orderNumber": "TYS-20261112-50910",
+    "receiptAccessToken": "rcpt_sec_9942a8b3e",
     "idempotencyKey": "9f8b4c2e-6d1a-4f53-b827-0c1e84a2d991"
   }
   ```
-  - `verifiedDiscountEgp` **must equal** `order.discountEgp` from the backend order creation response (never client-side `appliedDiscountEgp`).
-  - `idempotencyKey` passes the purchase attempt's unique identifier to Stripe. Consistent with the backend `Idempotency-Key` header (which uses a standard UUID); do not require or enforce a `chk-` prefix unless explicitly generated. The Vercel function accepts any string up to 120 characters, defaulting to `order-${orderNumber}` if omitted.
+  - The Vercel function fetches the authoritative order from `GET https://clothesai3d.runasp.net/api/orders/{orderNumber}` using `X-Receipt-Token`, validates that `paymentMethod === "stripe"` and the order is not already `paid` or `cancelled`, and computes the Stripe charge exclusively from `order.finalTotalEgp * 100` piastres.
+  - Legacy single-item fields (`fashionItemId`, `variantId`, `size`, `quantity`, `verifiedDiscountEgp`) remain supported as a fallback for external callers.
+  - `idempotencyKey` passes the purchase attempt's unique UUID to Stripe (consistent with the backend `Idempotency-Key` header; no `chk-` prefix required).
 - **Response (`200 OK`):** `{ "sessionId": "cs_...", "checkoutUrl": "https://checkout.stripe.com/...", "mode": "sandbox" }`.
 - **Zero-Payable Handling:** If loyalty points cover 100% of the purchase (`finalTotalEgp == 0`), the helper returns `zero_payable_total` (HTTP 400). The user must select Cash on Delivery.
 
@@ -834,11 +839,13 @@ To maintain rigorous engineering standards, testing claims are strictly separate
 
 ### 9.2 Verified Automated Test Results
 - **Frontend Test Suite (`npm test`):**
-  - `src/__tests__/commerce.test.ts` (19 tests passed)
+  - `src/__tests__/commerce.test.ts` (26 tests passed)
   - `src/__tests__/tryOnStudio.test.ts` (10 tests passed)
+  - `src/__tests__/cartAndContext.test.tsx` (4 integration tests passed)
   - `src/__tests__/liveBackend.test.ts` (1 live integration contract test passed against `https://clothesai3d.runasp.net`)
-  - **Total:** 30 passed out of 30 tests.
+  - **Total:** 41 passed out of 41 tests.
 - **Backend Automated Suite:** 154 automated HTTP tests passed with mocked providers.
+- **Stripe Account Parity Note:** While both Vercel (`STRIPE_SECRET_KEY`) and the live ASP.NET backend (`Shop__Stripe__SecretKey`) are configured, end-to-end Sandbox payment verification parity remains marked as pending until a live Sandbox checkout and `POST /api/orders/{orderNumber}/verify-payment` round-trip are manually confirmed.
 
 ### 9.3 17-Step Full User Journey Integration Checklist
 - [ ] **1. Browse Products:** Open `/browse`, verify category counts, and search for apparel.
@@ -991,9 +998,10 @@ The project implementation and maintenance responsibilities are divided among fi
 - Coordinate with **Person 5** for the final order payload and checkout flow.
 
 ### Important Requirements
-- The backend currently supports **one product per order**.
-- Do not assume a multi-product cart can be submitted as one order.
-- If the UI supports multiple cart items, implement a clear strategy that respects the backend contract (e.g. prompt customer to checkout items individually).
+- The backend supports **multi-product orders (`items[]`)** with 1 to 20 distinct line items per order and quantity 1 to 20 per line.
+- Persist the shopping cart in `localStorage` under `tys.cart` using composite line keys (`fashionItemId + variantId + size`).
+- Merge identical product/variant/size additions and never silently discard quantities if a merge exceeds 20 units—inform the customer and let them adjust.
+- Keep **Buy Now** (`checkoutMode = 'buy_now'`) isolated from `tys.cart` so express single-item checkout never overwrites or clears the saved cart.
 - Do not treat frontend-calculated prices or discounts as authoritative. Backend calculates the final order amount.
 - Keep quantity within the supported range of 1–20 per order item.
 

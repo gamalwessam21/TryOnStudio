@@ -66,6 +66,34 @@ export interface CustomerValidationErrors {
   phone?: string;
 }
 
+export function validatePhoneNumber(
+  phone: string,
+  lang: AppLanguage = 'en'
+): string | undefined {
+  const normalizedPhone = normalizePhoneNumber(phone);
+  // Accepts Egyptian mobile (010/011/012/015 + 8 digits or +201...) and standard E.164 (+country + 8-14 digits)
+  const egyptLocalPattern = /^01[0125]\d{8}$/;
+  const egyptIntlPattern = /^\+201[0125]\d{8}$/;
+  const generalIntlPattern = /^\+[1-9]\d{7,14}$/;
+
+  if (!normalizedPhone) {
+    return lang === 'ar'
+      ? 'يرجى إدخال رقم الهاتف المحمول.'
+      : 'Please enter your mobile phone number.';
+  }
+  if (
+    normalizedPhone.length > 30 ||
+    (!egyptLocalPattern.test(normalizedPhone) &&
+      !egyptIntlPattern.test(normalizedPhone) &&
+      !generalIntlPattern.test(normalizedPhone))
+  ) {
+    return lang === 'ar'
+      ? 'أدخل رقم موبايل صحيح (مثل 01012345678 أو +201012345678).'
+      : 'Enter a valid mobile number (e.g. 01012345678 or +201012345678).';
+  }
+  return undefined;
+}
+
 export function validateCustomerInfo(
   fullName: string,
   phone: string,
@@ -84,36 +112,29 @@ export function validateCustomerInfo(
       lang === 'ar'
         ? 'يجب أن يتكون الاسم الكامل من 3 إلى 100 حرف.'
         : 'Full name must be between 3 and 100 characters.';
-  } else if (!/^[\p{L}\s.'-]+$/u.test(trimmedName) || trimmedName.split(' ').length < 2) {
+  } else if (!/^[\p{L}\s.'-]+$/u.test(trimmedName)) {
     errors.fullName =
       lang === 'ar'
-        ? 'يرجى إدخال الاسم الأول واسم العائلة بحروف صحيحة.'
-        : 'Please enter both your first and last name using valid letters.';
+        ? 'يرجى إدخال الاسم بحروف صحيحة.'
+        : 'Please enter your name using valid letters.';
   }
 
-  const normalizedPhone = normalizePhoneNumber(phone);
-  // Accepts Egyptian mobile (010/011/012/015 + 8 digits or +201...) and standard E.164 (+country + 8-14 digits)
-  const egyptLocalPattern = /^01[0125]\d{8}$/;
-  const egyptIntlPattern = /^\+201[0125]\d{8}$/;
-  const generalIntlPattern = /^\+[1-9]\d{7,14}$/;
-
-  if (!normalizedPhone) {
-    errors.phone =
-      lang === 'ar'
-        ? 'يرجى إدخال رقم الهاتف المحمول.'
-        : 'Please enter your mobile phone number.';
-  } else if (
-    !egyptLocalPattern.test(normalizedPhone) &&
-    !egyptIntlPattern.test(normalizedPhone) &&
-    !generalIntlPattern.test(normalizedPhone)
-  ) {
-    errors.phone =
-      lang === 'ar'
-        ? 'أدخل رقم موبايل صحيح (مثل 01012345678 أو +201012345678).'
-        : 'Enter a valid mobile number (e.g. 01012345678 or +201012345678).';
+  const phoneError = validatePhoneNumber(phone, lang);
+  if (phoneError) {
+    errors.phone = phoneError;
   }
 
   return errors;
+}
+
+export function buildCartLineKey(
+  fashionItemId: number,
+  variantId: number | null,
+  size: string | null
+): string {
+  const vKey = variantId !== null && variantId !== undefined ? String(variantId) : 'default';
+  const sKey = size && size.trim() ? size.trim().toUpperCase() : 'nosize';
+  return `${fashionItemId}::${vKey}::${sKey}`;
 }
 
 export function maskPhoneNumber(phone: string): string {
@@ -294,12 +315,14 @@ export function evaluatePointsRedemption(params: {
   };
 }
 
-export function generateIdempotencyKey(prefix = 'ord'): string {
+export function generateIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`;
+    return crypto.randomUUID();
   }
-  return `${prefix}-${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 

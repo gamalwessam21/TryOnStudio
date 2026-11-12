@@ -11,6 +11,7 @@ import { FashionAssistantPage } from './pages/FashionAssistantPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { ReceiptPage } from './pages/ReceiptPage';
 import { LoyaltyPage } from './pages/LoyaltyPage';
+import { CartPage } from './pages/CartPage';
 
 export function App() {
   return (
@@ -21,9 +22,11 @@ export function App() {
             <Routes>
               <Route element={<Layout />}>
                 <Route index element={<StudioPage />} />
+                <Route path="studio" element={<StudioPage />} />
                 <Route path="browse" element={<BrowsePage />} />
                 <Route path="size-guide" element={<SizeGuidePage />} />
                 <Route path="assistant" element={<FashionAssistantPage />} />
+                <Route path="cart" element={<CartPage />} />
                 <Route path="checkout" element={<CheckoutPage />} />
                 <Route path="orders/:orderNumber" element={<ReceiptPage />} />
                 <Route path="loyalty" element={<LoyaltyPage />} />

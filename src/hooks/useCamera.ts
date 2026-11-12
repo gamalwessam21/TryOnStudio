@@ -13,32 +13,53 @@ export interface UseCameraResult {
   stopCamera: () => void;
 }
 
+function isArabicActive(): boolean {
+  return typeof document !== 'undefined' && document.documentElement.lang === 'ar';
+}
+
 function mapMediaError(err: unknown): string {
+  const isAr = isArabicActive();
   if (!window.isSecureContext) {
-    return 'Camera access requires a secure connection (HTTPS or localhost). Please open the app over HTTPS.';
+    return isAr
+      ? 'يتطلب الوصول إلى الكاميرا اتصالاً آمناً (HTTPS أو localhost). يرجى فتح التطبيق عبر HTTPS.'
+      : 'Camera access requires a secure connection (HTTPS or localhost). Please open the app over HTTPS.';
   }
 
   if (err instanceof DOMException) {
     switch (err.name) {
       case 'NotAllowedError':
       case 'PermissionDeniedError':
-        return 'Camera permission was denied. Please allow camera access in your browser address bar settings and try again.';
+        return isAr
+          ? 'تم رفض إذن الكاميرا. يرجى السماح بالوصول إلى الكاميرا من إعدادات شريط عنوان المتصفح والمحاولة مرة أخرى.'
+          : 'Camera permission was denied. Please allow camera access in your browser address bar settings and try again.';
       case 'NotFoundError':
       case 'DevicesNotFoundError':
-        return 'No camera was detected on this device. Connect a webcam and try again.';
+        return isAr
+          ? 'لم يتم اكتشاف أي كاميرا على هذا الجهاز. قم بتوصيل كاميرا والمحاولة مرة أخرى.'
+          : 'No camera was detected on this device. Connect a webcam and try again.';
       case 'NotReadableError':
       case 'TrackStartError':
-        return 'Your camera is currently in use by another application or tab. Close other camera apps and retry.';
+        return isAr
+          ? 'الكاميرا قيد الاستخدام حالياً بواسطة تطبيق أو علامة تبويب أخرى. يرجى إغلاق تطبيقات الكاميرا الأخرى والمحاولة مرة أخرى.'
+          : 'Your camera is currently in use by another application or tab. Close other camera apps and retry.';
       case 'OverconstrainedError':
-        return 'Your camera did not match the requested video resolution. Please retry.';
+        return isAr
+          ? 'لم تتطابق الكاميرا مع دقة الفيديو المطلوبة. يرجى المحاولة مرة أخرى.'
+          : 'Your camera did not match the requested video resolution. Please retry.';
       case 'SecurityError':
-        return 'Camera access was blocked by browser security settings. Ensure you are using HTTPS.';
+        return isAr
+          ? 'تم حظر الوصول إلى الكاميرا بواسطة إعدادات أمان المتصفح. تأكد من استخدام HTTPS.'
+          : 'Camera access was blocked by browser security settings. Ensure you are using HTTPS.';
       default:
-        return `Could not start camera (${err.name}). Please check permissions and try again.`;
+        return isAr
+          ? `تعذر تشغيل الكاميرا (${err.name}). يرجى التحقق من الأذونات والمحاولة مرة أخرى.`
+          : `Could not start camera (${err.name}). Please check permissions and try again.`;
     }
   }
 
-  return 'Unable to access your camera. Please check browser permissions and try again.';
+  return isAr
+    ? 'تعذر الوصول إلى الكاميرا. يرجى التحقق من أذونات المتصفح والمحاولة مرة أخرى.'
+    : 'Unable to access your camera. Please check browser permissions and try again.';
 }
 
 export function useCamera(onCameraStopped?: () => void): UseCameraResult {

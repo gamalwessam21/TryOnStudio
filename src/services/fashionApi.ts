@@ -12,8 +12,8 @@ import type {
   TryOnToken,
 } from '../types/api';
 
-const DEFAULT_TIMEOUT_MS = 25_000;
-const SIZE_SCAN_TIMEOUT_MS = 65_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
+const SIZE_SCAN_TIMEOUT_MS = 60_000;
 
 export const SIZE_SCAN_LIMITS = {
   MIN_FRAMES: 8,
@@ -32,22 +32,40 @@ function resolveBaseUrl(): string {
 
 export const API_BASE_URL = resolveBaseUrl();
 
+export function parseRetryAfterHeader(headerValue: string | null): number | null {
+  if (!headerValue) return null;
+  const trimmed = headerValue.trim();
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric) && numeric >= 0) {
+    return Math.ceil(numeric);
+  }
+  const dateMs = Date.parse(trimmed);
+  if (!Number.isNaN(dateMs)) {
+    const diffSeconds = Math.ceil((dateMs - Date.now()) / 1000);
+    return diffSeconds > 0 ? diffSeconds : 0;
+  }
+  return null;
+}
+
 export class ApiError extends Error {
   public readonly status: number;
   public readonly code: SizeScanErrorCode | null;
   public readonly validationErrors: Record<string, string[]> | null;
+  public readonly retryAfterSeconds: number | null;
 
   constructor(
     message: string,
     status: number,
     code: SizeScanErrorCode | null = null,
-    validationErrors: Record<string, string[]> | null = null
+    validationErrors: Record<string, string[]> | null = null,
+    retryAfterSeconds: number | null = null
   ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.validationErrors = validationErrors;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -55,24 +73,33 @@ export class ApiError extends Error {
  * Formats size-scan API errors into clear, documented user-facing guidance
  * without exposing internal server details.
  */
-export function formatSizeScanError(err: unknown): {
+export function formatSizeScanError(
+  err: unknown,
+  lang: 'en' | 'ar' = 'en'
+): {
   title: string;
   message: string;
   recoveryHint?: string;
   code?: string | null;
 } {
+  const isAr = lang === 'ar';
+
   if (err instanceof DOMException && err.name === 'AbortError') {
     return {
-      title: 'Scan Cancelled',
-      message: 'The size scan was cancelled or timed out.',
-      recoveryHint: 'When ready, stand 1–2 metres back and try scanning again.',
+      title: isAr ? 'تم إلغاء المسح' : 'Scan Cancelled',
+      message: isAr
+        ? 'تم إلغاء مسح المقاس أو انتهت مهلة الاتصال.'
+        : 'The size scan was cancelled or timed out.',
+      recoveryHint: isAr
+        ? 'عند الاستعداد، قف على بعد ١–٢ متر وحاول المسح مرة أخرى.'
+        : 'When ready, stand 1–2 metres back and try scanning again.',
     };
   }
 
   if (err instanceof ApiError) {
     switch (err.status) {
       case 422: {
-        const codeHints: Record<string, string> = {
+        const codeHintsEn: Record<string, string> = {
           no_pose:
             'Make sure you are standing in front of the camera in good lighting with your whole body in view.',
           too_close:
@@ -82,82 +109,149 @@ export function formatSizeScanError(err: unknown): {
           bad_height:
             'Ensure your full body from the top of your head down to your feet is unobstructed in the frame.',
         };
+        const codeHintsAr: Record<string, string> = {
+          no_pose:
+            'تأكد من وقوفك أمام الكاميرا في إضاءة جيدة مع ظهور جسمك بالكامل داخل الإطار.',
+          too_close:
+            'تراجع للخلف مسافة ١–٢ متر أو اضبط زاوية الكاميرا ليظهر رأسك وقدماك بوضوح.',
+          turned:
+            'واجه الكاميرا مباشرة بكتفين مستقيمين واترك مسافة بسيطة بين ذراعيك وجسمك.',
+          bad_height:
+            'تأكد من ظهور جسمك بالكامل من أعلى الرأس حتى القدمين دون عوائق.',
+        };
+        const hints = isAr ? codeHintsAr : codeHintsEn;
         const hint =
-          (err.code && codeHints[err.code]) ||
-          'Stand 1–2 metres back, keep your full body from head to feet visible, and face the camera directly.';
+          (err.code && hints[err.code]) ||
+          (isAr
+            ? 'قف على بعد ١–٢ متر، واجعل جسمك بالكامل من الرأس للقدمين ظاهراً ومواجهاً للكاميرا.'
+            : 'Stand 1–2 metres back, keep your full body from head to feet visible, and face the camera directly.');
         return {
-          title: 'Adjust Your Position',
+          title: isAr ? 'اضبط وضعية الوقوف' : 'Adjust Your Position',
           message:
             err.message ||
-            'We could not clearly detect your full body posture from those frames.',
+            (isAr
+              ? 'لم نتمكن من رصد وضعية الجسم بالكامل من الصور الملتقطة.'
+              : 'We could not clearly detect your full body posture from those frames.'),
           recoveryHint: hint,
           code: err.code,
         };
       }
       case 400:
         return {
-          title: 'Images Could Not Be Processed',
-          message:
-            'The captured camera frames could not be processed. Please make sure your camera is active and try again.',
-          recoveryHint: 'Try restarting the scan while standing still in good lighting.',
+          title: isAr ? 'تعذر معالجة الصور' : 'Images Could Not Be Processed',
+          message: isAr
+            ? 'تعذر معالجة إطارات الكاميرا الملتقطة. تأكد من تشغيل الكاميرا وحاول مرة أخرى.'
+            : 'The captured camera frames could not be processed. Please make sure your camera is active and try again.',
+          recoveryHint: isAr
+            ? 'حاول إعادة المسح مع الوقوف بثبات في إضاءة جيدة.'
+            : 'Try restarting the scan while standing still in good lighting.',
         };
       case 404:
         return {
-          title: 'Product Not Found',
-          message: 'The selected clothing item could not be found on the server.',
-          recoveryHint: 'Please select an available item from the catalog and try again.',
+          title: isAr ? 'المنتج غير موجود' : 'Product Not Found',
+          message: isAr
+            ? 'لم يتم العثور على قطعة الملابس المحددة على الخادم.'
+            : 'The selected clothing item could not be found on the server.',
+          recoveryHint: isAr
+            ? 'يرجى اختيار منتج متاح من الكتالوج والمحاولة مرة أخرى.'
+            : 'Please select an available item from the catalog and try again.',
         };
       case 409:
         return {
-          title: 'Sizes Unavailable',
-          message: "Sizes aren't available for this item.",
+          title: isAr ? 'المقاسات غير متوفرة' : 'Sizes Unavailable',
+          message: isAr
+            ? 'لا تتوفر مقاسات لهذه القطعة حالياً.'
+            : "Sizes aren't available for this item.",
         };
-      case 429:
+      case 413:
         return {
-          title: 'Too Many Requests',
-          message:
-            'Too many size scan requests were made in a short period. Please wait a minute before trying again.',
+          title: isAr ? 'حجم الصور كبير جداً' : 'Upload Too Large',
+          message: isAr
+            ? 'حجم الصور الملتقطة يتجاوز الحد المسموح به (٢٠ ميجابايت). يرجى إعادة المحاولة.'
+            : 'Captured frames exceed the maximum upload size limit (20 MB). Please try again.',
         };
+      case 429: {
+        const waitSec = err.retryAfterSeconds;
+        return {
+          title: isAr ? 'طلبات كثيرة جداً' : 'Too Many Requests',
+          message: waitSec
+            ? isAr
+              ? `تم إرسال طلبات مسح كثيرة. يرجى الانتظار ${waitSec} ثانية قبل المحاولة مرة أخرى.`
+              : `Too many size scan requests. Please wait ${waitSec} seconds before trying again.`
+            : isAr
+              ? 'تم إرسال طلبات مسح كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل المحاولة مرة أخرى.'
+              : 'Too many size scan requests were made in a short period. Please wait a minute before trying again.',
+        };
+      }
       case 502:
       case 503:
       case 504:
         return {
-          title: 'Size Service Unavailable',
-          message: "We couldn't determine your size right now. Please try again later.",
-          recoveryHint:
-            'The upstream AI size service may be waking up or temporarily offline.',
+          title: isAr ? 'خدمة المقاسات غير متاحة مؤقتاً' : 'Size Service Unavailable',
+          message: isAr
+            ? 'تعذر تحديد مقاسك الآن. يرجى المحاولة مرة أخرى لاحقاً.'
+            : "We couldn't determine your size right now. Please try again later.",
+          recoveryHint: isAr
+            ? 'قد تكون خدمة الذكاء الاصطناعي للمقاسات قيد التشغيل أو غير متاحة مؤقتاً.'
+            : 'The upstream AI size service may be waking up or temporarily offline.',
         };
       default:
         return {
-          title: 'Size Scan Failed',
-          message: "We couldn't determine your size right now. Please try again later.",
+          title: isAr ? 'فشل مسح المقاس' : 'Size Scan Failed',
+          message: isAr
+            ? 'تعذر تحديد مقاسك الآن. يرجى المحاولة مرة أخرى لاحقاً.'
+            : "We couldn't determine your size right now. Please try again later.",
         };
     }
   }
 
   if (err instanceof Error) {
     return {
-      title: 'Size Scan Issue',
+      title: isAr ? 'تنبيه مسح المقاس' : 'Size Scan Issue',
       message: err.message,
     };
   }
 
   return {
-    title: 'Size Scan Failed',
-    message: "We couldn't determine your size right now. Please try again later.",
+    title: isAr ? 'فشل مسح المقاس' : 'Size Scan Failed',
+    message: isAr
+      ? 'تعذر تحديد مقاسك الآن. يرجى المحاولة مرة أخرى لاحقاً.'
+      : "We couldn't determine your size right now. Please try again later.",
   };
 }
 
 /**
  * Formats general API errors into concise, user-safe messages.
  */
-export function formatGeneralApiError(err: unknown, fallbackMessage: string): string {
+export function formatGeneralApiError(
+  err: unknown,
+  fallbackMessage: string,
+  lang: 'en' | 'ar' = 'en'
+): string {
+  const isAr = lang === 'ar';
   if (err instanceof ApiError) {
     if (err.status === 0) {
-      return 'Unable to reach the Try On Studio server. Check your internet connection or CORS configuration.';
+      return isAr
+        ? 'تعذر الاتصال بخادم Try On Studio. يرجى التحقق من اتصال الإنترنت.'
+        : 'Unable to reach the Try On Studio server. Check your internet connection or CORS configuration.';
+    }
+    if (err.status === 413) {
+      return isAr
+        ? 'حجم البيانات المرسلة كبير جداً. يرجى تقليل الحجم والمحاولة مرة أخرى.'
+        : 'The request payload is too large. Please try again with smaller data.';
     }
     if (err.status === 429) {
-      return 'Too many requests right now. Please wait a moment and try again.';
+      if (err.retryAfterSeconds && err.retryAfterSeconds > 0) {
+        return isAr
+          ? `طلبات كثيرة جداً حالياً. يرجى الانتظار ${err.retryAfterSeconds} ثانية والمحاولة مرة أخرى.`
+          : `Too many requests right now. Please wait ${err.retryAfterSeconds}s and try again.`;
+      }
+      return (
+        err.message ||
+        (isAr
+          ? 'طلبات كثيرة جداً حالياً. يرجى الانتظار قليلاً والمحاولة مرة أخرى.'
+          : 'Too many requests right now. Please wait a moment and try again.')
+      );
     }
     if (err.status >= 500) {
       return err.message || fallbackMessage;
@@ -279,12 +373,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         errData.error?.trim() ||
         validationMsg ||
         `Request failed with status ${response.status}.`;
+      const retryAfter = parseRetryAfterHeader(
+        response.headers.get('retry-after')
+      );
 
       throw new ApiError(
         serverMessage,
         response.status,
         errData.code ?? null,
-        errData.errors ?? null
+        errData.errors ?? null,
+        retryAfter
       );
     }
 

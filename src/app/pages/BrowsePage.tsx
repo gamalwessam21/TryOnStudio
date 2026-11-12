@@ -1,20 +1,23 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  Check,
   Layers,
   RefreshCw,
-  Ruler,
   Shirt,
-  ShoppingBag,
-  Sparkles,
+  ShoppingCart,
 } from 'lucide-react';
 import { useStudio } from '../StudioContext';
 import { useCommerce } from '../CommerceContext';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { GarmentImage } from '../../components/GarmentImage';
-import { ClothingRack360 } from '../../features/catalog/ClothingRack360';
-import { formatDualPrice } from '../../utils/commerceHelpers';
+import {
+  ClothingRack360,
+  type EnrichedRackPiece,
+} from '../../features/catalog/ClothingRack360';
+import { ProductDetailsModal } from '../../features/catalog/ProductDetailsModal';
 import { fashionApi } from '../../services/fashionApi';
+import type { FashionItemDetails, FashionVariant } from '../../types/api';
 
 export function BrowsePage() {
   const {
@@ -32,34 +35,218 @@ export function BrowsePage() {
     rackError,
     reloadRack,
     selectItem,
+    itemDetailsCache,
+    ensureItemDetails,
   } = useStudio();
-  const { usdToEgpRate, prepareCheckoutFromItem } = useCommerce();
+  const {
+    prepareCheckoutFromItem,
+    addToCart,
+    setCartDrawerOpen,
+    cartNotice,
+    clearCartNotice,
+  } = useCommerce();
   const { language, t } = useLanguage();
 
   const navigate = useNavigate();
 
-  function openInStudio(id: number) {
-    selectItem(id);
+  // Per-item selected variant and size overrides
+  const [cardVariantMap, setCardVariantMap] = useState<Record<number, number>>(
+    {}
+  );
+  const [cardSizeMap, setCardSizeMap] = useState<Record<number, string>>({});
+  const [modalItemId, setModalItemId] = useState<number | null>(null);
+  const [modalLoading, setModalLoading] = useState<boolean>(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  // Lookup map of 360° frames by numeric item ID from /api/fashion-items/rack
+  const rackFramesByItemId = useMemo(() => {
+    const map: Record<number, string[]> = {};
+    for (const r of rackItems) {
+      const numId = Number(r.id);
+      if (
+        Number.isInteger(numId) &&
+        numId > 0 &&
+        Array.isArray(r.frames) &&
+        r.frames.length > 0
+      ) {
+        map[numId] = r.frames;
+      }
+    }
+    return map;
+  }, [rackItems]);
+
+  // Background-enrich all catalog items with variants & sizes so they work directly on the rack
+  useEffect(() => {
+    let cancelled = false;
+    async function enrichVisibleItems() {
+      for (const item of items.slice(0, 20)) {
+        if (cancelled) break;
+        if (!itemDetailsCache[item.id]) {
+          await ensureItemDetails(item.id);
+        }
+      }
+    }
+    if (items.length > 0) {
+      void enrichVisibleItems();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [items, itemDetailsCache, ensureItemDetails]);
+
+  // Merge all catalog items with 360° rack frames + variant/size details so ALL items hang on the rack
+  const unifiedRackPieces = useMemo<EnrichedRackPiece[]>(() => {
+    if (items.length > 0) {
+      return items.map((item) => {
+        const details = itemDetailsCache[item.id];
+        const variants = details?.variants ?? [];
+        const offeredSizes = details?.availableSizes ?? [];
+        const activeVarId = cardVariantMap[item.id];
+        const activeVariant =
+          (activeVarId !== undefined
+            ? variants.find((v) => v.id === activeVarId)
+            : undefined) ??
+          variants[0] ??
+          null;
+        const activeSize =
+          cardSizeMap[item.id] ??
+          (offeredSizes.length > 0 ? offeredSizes[0] : null);
+
+        const rackFrames = rackFramesByItemId[item.id];
+        const isDefaultVariant =
+          activeVarId === undefined || activeVarId === variants[0]?.id;
+
+        let frames: string[] = [];
+        if (isDefaultVariant && rackFrames && rackFrames.length > 0) {
+          frames = rackFrames;
+        } else {
+          const primaryImg =
+            activeVariant?.imageUrl ||
+            item.thumbnailUrl ||
+            variants[0]?.imageUrl ||
+            '';
+          frames = primaryImg ? [primaryImg] : [];
+        }
+
+        return {
+          id: String(item.id),
+          name: item.name,
+          price: item.price,
+          frames,
+          categoryName: item.categoryName,
+          description: item.description,
+          variants,
+          selectedVariant: activeVariant,
+          availableSizes: offeredSizes,
+          selectedSize: activeSize,
+        };
+      });
+    }
+
+    // Fallback to raw rackItems if catalog items haven't populated yet
+    if (selectedCategoryId === null && !searchQuery.trim()) {
+      return rackItems.map((r) => ({ ...r }));
+    }
+
+    return [];
+  }, [
+    items,
+    itemDetailsCache,
+    cardVariantMap,
+    cardSizeMap,
+    rackFramesByItemId,
+    selectedCategoryId,
+    searchQuery,
+    rackItems,
+  ]);
+
+  function openInStudio(id: number, preferredVariantId?: number) {
+    selectItem(id, preferredVariantId ?? cardVariantMap[id]);
     navigate(`/?item=${id}`);
   }
 
   function openInSizeFinder(id: number) {
-    selectItem(id);
+    selectItem(id, cardVariantMap[id]);
     navigate(`/size-guide?item=${id}`);
   }
 
-  async function handleQuickBuy(id: number) {
-    selectItem(id);
+  async function resolveDetails(id: number): Promise<FashionItemDetails> {
+    const cached = itemDetailsCache[id];
+    if (cached) return cached;
+    const loaded = await ensureItemDetails(id);
+    if (loaded) return loaded;
+    return fashionApi.getFashionItemDetails(id);
+  }
+
+  async function handleOpenDetails(id: number) {
+    setModalItemId(id);
+    setModalError(null);
+    if (!itemDetailsCache[id]) {
+      setModalLoading(true);
+      try {
+        await resolveDetails(id);
+      } catch {
+        setModalError(
+          language === 'ar'
+            ? 'تعذر تحميل تفاصيل القطعة.'
+            : 'Could not load product details.'
+        );
+      } finally {
+        setModalLoading(false);
+      }
+    }
+  }
+
+  async function handleAddToCartFromRack(id: number) {
     try {
-      const details = await fashionApi.getFashionItemDetails(id);
-      const defaultSize =
-        details.availableSizes && details.availableSizes.length === 1
-          ? details.availableSizes[0]
-          : null;
+      const details = await resolveDetails(id);
+      const chosenVariantId = cardVariantMap[id];
+      const chosenVariant =
+        (chosenVariantId !== undefined
+          ? details.variants?.find((v) => v.id === chosenVariantId)
+          : undefined) ??
+        details.variants?.[0] ??
+        null;
+      const offeredSizes = details.availableSizes ?? [];
+      const chosenSize =
+        cardSizeMap[id] ?? (offeredSizes.length > 0 ? offeredSizes[0] : null);
+
+      const res = addToCart({
+        item: details,
+        variant: chosenVariant,
+        size: chosenSize,
+        quantity: 1,
+      });
+      if (res.ok) {
+        setCartDrawerOpen(true);
+      }
+    } catch {
+      void handleOpenDetails(id);
+    }
+  }
+
+  async function handleQuickBuy(id: number) {
+    selectItem(id, cardVariantMap[id]);
+    try {
+      const details = await resolveDetails(id);
+      const chosenVariantId = cardVariantMap[id];
+      const chosenVariant =
+        (chosenVariantId !== undefined
+          ? details.variants?.find((v) => v.id === chosenVariantId)
+          : undefined) ??
+        details.variants?.[0] ??
+        null;
+      const offeredSizes = details.availableSizes ?? [];
+      const chosenSize =
+        cardSizeMap[id] ??
+        (offeredSizes.length === 1
+          ? offeredSizes[0]
+          : offeredSizes[0] ?? null);
+
       prepareCheckoutFromItem({
         item: details,
-        variant: details.variants?.[0] ?? null,
-        size: defaultSize,
+        variant: chosenVariant,
+        size: chosenSize,
         quantity: 1,
       });
       navigate('/checkout');
@@ -68,13 +255,40 @@ export function BrowsePage() {
     }
   }
 
+  function handleBuyNowFromModal(params: {
+    item: FashionItemDetails;
+    variant: FashionVariant | null;
+    size: string | null;
+    quantity: number;
+  }) {
+    setModalItemId(null);
+    selectItem(params.item.id, params.variant?.id);
+    prepareCheckoutFromItem(params);
+    navigate('/checkout');
+  }
+
+  const activeModalItem =
+    modalItemId !== null ? itemDetailsCache[modalItemId] ?? null : null;
+  const activeModalIndex = useMemo(
+    () =>
+      modalItemId !== null
+        ? unifiedRackPieces.findIndex((it) => Number(it.id) === modalItemId)
+        : -1,
+    [unifiedRackPieces, modalItemId]
+  );
+
+  const isRackLoading =
+    itemsLoading && rackLoading && unifiedRackPieces.length === 0;
+  const combinedError =
+    unifiedRackPieces.length === 0 ? itemsError || rackError : null;
+
   return (
     <div className="browse-page">
-      {/* Page Intro */}
+      {/* Page Intro + Category Filter Bar */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-end',
+          alignItems: 'center',
           justifyContent: 'space-between',
           gap: 16,
           flexWrap: 'wrap',
@@ -88,27 +302,13 @@ export function BrowsePage() {
             {t('browseSubtitle')}
           </p>
         </div>
-      </div>
 
-      {/* 360 Interactive Rack */}
-      <ClothingRack360
-        rackItems={rackItems}
-        loading={rackLoading}
-        error={rackError}
-        onRetry={() => void reloadRack()}
-        onOpenInStudio={openInStudio}
-      />
-
-      {/* Full Catalog Section */}
-      <section aria-label={t('browseTitle')}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
+            gap: 10,
             flexWrap: 'wrap',
-            marginBottom: 14,
           }}
         >
           <div className="category-pills" style={{ marginBottom: 0 }}>
@@ -151,164 +351,133 @@ export function BrowsePage() {
             </button>
           )}
         </div>
+      </div>
 
-        {itemsError ? (
-          <div className="banner banner-error">
-            <AlertCircle size={18} style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>{itemsError}</div>
+      {cartNotice && (
+        <div
+          className="banner banner-info"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Check size={16} />
+            <span>{cartNotice}</span>
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={() => setCartDrawerOpen(true)}
+            >
+              <ShoppingCart size={14} />
+              <span>{t('viewCartBtn')}</span>
+            </button>
             <button
               type="button"
               className="btn btn-sm btn-secondary"
-              onClick={() => void reloadItems()}
+              onClick={clearCartNotice}
             >
-              <RefreshCw size={13} />
-              <span>{t('retryBtn')}</span>
+              {t('dismissBanner')}
             </button>
           </div>
-        ) : itemsLoading ? (
-          <div className="catalog-full-grid">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="card catalog-card">
-                <div
-                  className="skeleton"
-                  style={{ width: '100%', aspectRatio: '4/5' }}
-                />
-                <div
-                  className="skeleton"
-                  style={{ width: '70%', height: 18 }}
-                />
-                <div
-                  className="skeleton"
-                  style={{ width: '100%', height: 36 }}
-                />
-              </div>
-            ))}
-          </div>
-        ) : items.length === 0 ? (
-          <div
-            className="card"
-            style={{
-              padding: '42px 20px',
-              textAlign: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 12,
+        </div>
+      )}
+
+      {/* Empty Search / Filter State */}
+      {!isRackLoading && !combinedError && unifiedRackPieces.length === 0 ? (
+        <div
+          className="card"
+          style={{
+            padding: '42px 20px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <Shirt size={36} color="#94a3b8" />
+          <h3>{t('noProductsFound')}</h3>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedCategoryId(null);
             }}
           >
-            <Shirt size={36} color="#94a3b8" />
-            <h3>{t('noProductsFound')}</h3>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCategoryId(null);
-              }}
-            >
-              {t('resetFilters')}
-            </button>
-          </div>
-        ) : (
-          <div className="catalog-full-grid">
-            {items.map((item) => (
-              <article key={item.id} className="card catalog-card">
-                <GarmentImage
-                  src={item.thumbnailUrl}
-                  alt={item.name}
-                  categoryName={item.categoryName}
-                  aspectRatio="4/5"
-                />
+            {t('resetFilters')}
+          </button>
+        </div>
+      ) : combinedError ? (
+        <div className="banner banner-error">
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>{combinedError}</div>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary"
+            onClick={() => {
+              void reloadItems();
+              void reloadRack();
+            }}
+          >
+            <RefreshCw size={13} />
+            <span>{t('retryBtn')}</span>
+          </button>
+        </div>
+      ) : (
+        /* Unified 360° Interactive Hanging Clothesline Rack containing ALL items */
+        <ClothingRack360
+          rackItems={unifiedRackPieces}
+          loading={isRackLoading}
+          error={combinedError}
+          onRetry={() => {
+            void reloadItems();
+            void reloadRack();
+          }}
+          onOpenInStudio={openInStudio}
+          onInspectItem={(id) => void handleOpenDetails(id)}
+          onSelectVariant={(itemId, variantId) =>
+            setCardVariantMap((prev) => ({ ...prev, [itemId]: variantId }))
+          }
+          onSelectSize={(itemId, size) =>
+            setCardSizeMap((prev) => ({ ...prev, [itemId]: size }))
+          }
+          onAddToCart={(id) => void handleAddToCartFromRack(id)}
+          onBuyNow={(id) => void handleQuickBuy(id)}
+          onOpenSizeGuide={(id) => openInSizeFinder(id)}
+          itemDetailsCache={itemDetailsCache}
+        />
+      )}
 
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      color: 'var(--blue-600)',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {item.categoryName}
-                  </span>
-                  <span className="product-variant-tag">
-                    <bdi>{item.variantCount}</bdi>{' '}
-                    {t('tabColors')}
-                  </span>
-                </div>
-
-                <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>
-                  <bdi>{item.name}</bdi>
-                </h2>
-
-                <p
-                  style={{
-                    fontSize: '0.82rem',
-                    color: 'var(--text-secondary)',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {item.description}
-                </p>
-
-                <div
-                  style={{
-                    fontSize: '0.94rem',
-                    fontWeight: 700,
-                    marginTop: 'auto',
-                    paddingTop: 4,
-                    color: 'var(--accent)',
-                  }}
-                >
-                  <bdi dir="ltr">{formatDualPrice(item.price, usdToEgpRate, language)}</bdi>
-                </div>
-
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-primary"
-                    style={{ flex: 1, minWidth: 105 }}
-                    onClick={() => openInStudio(item.id)}
-                  >
-                    <Sparkles size={14} aria-hidden="true" />
-                    <span>{t('tryOn')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-accent"
-                    style={{ flex: 1, minWidth: 95 }}
-                    onClick={() => void handleQuickBuy(item.id)}
-                    aria-label={`Buy ${item.name}`}
-                  >
-                    <ShoppingBag size={14} aria-hidden="true" />
-                    <span>{t('buyNow')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => openInSizeFinder(item.id)}
-                    aria-label={`Check size for ${item.name}`}
-                    title={t('sizeGuide')}
-                  >
-                    <Ruler size={14} aria-hidden="true" />
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <ProductDetailsModal
+        item={activeModalItem}
+        loading={modalLoading}
+        error={modalError}
+        initialVariantId={
+          modalItemId !== null ? cardVariantMap[modalItemId] ?? null : null
+        }
+        initialSize={
+          modalItemId !== null ? cardSizeMap[modalItemId] ?? null : null
+        }
+        rackFrames={
+          modalItemId !== null ? rackFramesByItemId[modalItemId] ?? [] : []
+        }
+        itemIndex={activeModalIndex >= 0 ? activeModalIndex : undefined}
+        totalItems={unifiedRackPieces.length}
+        onClose={() => {
+          setModalItemId(null);
+          setModalError(null);
+        }}
+        onTryInStudio={(itemId, varId) => openInStudio(itemId, varId)}
+        onOpenSizeGuide={(itemId) => openInSizeFinder(itemId)}
+        onBuyNow={handleBuyNowFromModal}
+      />
     </div>
   );
 }

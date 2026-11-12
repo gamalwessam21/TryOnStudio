@@ -8,6 +8,7 @@ import {
   Ruler,
 } from 'lucide-react';
 import {
+  ApiError,
   fashionApi,
   formatGeneralApiError,
 } from '../../services/fashionApi';
@@ -41,7 +42,7 @@ export function SizeResultCard({
   canRetryScan,
   onRetryScan,
 }: SizeResultCardProps) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [selectedCheckSize, setSelectedCheckSize] = useState<string>('M');
   const [checkLoading, setCheckLoading] = useState<boolean>(false);
   const [checkResult, setCheckResult] = useState<SizeCheckResult | null>(null);
@@ -84,10 +85,17 @@ export function SizeResultCard({
       const res = await fashionApi.checkSize(item.id, selectedCheckSize);
       setCheckResult(res);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setCheckError(t('notInSelected'));
+        return;
+      }
       setCheckError(
         formatGeneralApiError(
           err,
-          'Could not check size availability right now.'
+          language === 'ar'
+            ? 'تعذر فحص توفر المقاس حالياً.'
+            : 'Could not check size availability right now.',
+          language
         )
       );
     } finally {

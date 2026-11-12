@@ -1,5 +1,14 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Check, RefreshCw, Shirt, ShoppingBag } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  RefreshCw,
+  Shirt,
+  ShoppingBag,
+  ShoppingCart,
+  X,
+} from 'lucide-react';
 import { GarmentImage } from '../../components/GarmentImage';
 import type { FashionItemDetails, FashionVariant } from '../../types/api';
 import { useCommerce } from '../../app/CommerceContext';
@@ -16,6 +25,7 @@ interface SelectedOutfitCardProps {
   tryOnActive: boolean;
   onSelectVariant: (variant: FashionVariant) => void;
   onChooseOutfit: () => void;
+  onClearSelection?: () => void;
   onRetry: () => void;
 }
 
@@ -29,6 +39,7 @@ export function SelectedOutfitCard({
   tryOnActive,
   onSelectVariant,
   onChooseOutfit,
+  onClearSelection,
   onRetry,
 }: SelectedOutfitCardProps) {
   const { language, t } = useLanguage();
@@ -37,8 +48,14 @@ export function SelectedOutfitCard({
     selectedPurchaseSize,
     setSelectedPurchaseSize,
     prepareCheckoutFromItem,
+    addToCart,
+    setCartDrawerOpen,
   } = useCommerce();
   const navigate = useNavigate();
+  const [cartFeedback, setCartFeedback] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   const catalogSizes =
     supportedSizes.length > 0
@@ -51,13 +68,35 @@ export function SelectedOutfitCard({
     item?.variants?.[0]?.imageUrl ||
     null;
 
+  const resolveSelectedOrDefaultSize = (): string | null => {
+    if (!item) return null;
+    if (selectedPurchaseSize) return selectedPurchaseSize;
+    if (item.availableSizes && item.availableSizes.length > 0) {
+      return item.availableSizes[0];
+    }
+    return null;
+  };
+
+  const handleAddToCart = () => {
+    if (!item) return;
+    const chosenSize = resolveSelectedOrDefaultSize();
+    if (chosenSize && !selectedPurchaseSize) {
+      setSelectedPurchaseSize(chosenSize);
+    }
+    const res = addToCart({
+      item,
+      variant,
+      size: chosenSize,
+      quantity: 1,
+    });
+    if (res.message) {
+      setCartFeedback({ ok: res.ok, message: res.message });
+    }
+  };
+
   const handleProceedToCheckout = () => {
     if (!item) return;
-    const defaultSize =
-      selectedPurchaseSize ??
-      (item.availableSizes && item.availableSizes.length === 1
-        ? item.availableSizes[0]
-        : null);
+    const defaultSize = resolveSelectedOrDefaultSize();
 
     prepareCheckoutFromItem({
       item,
@@ -73,27 +112,54 @@ export function SelectedOutfitCard({
       className="card bottom-card"
       aria-label={t('selectedOutfitTitle')}
     >
-      <div className="bottom-card-header">
-        <h2 className="bottom-card-title">
+      <div
+        className="bottom-card-header"
+        style={{ flexWrap: 'wrap', gap: 8 }}
+      >
+        <h2 className="bottom-card-title" style={{ whiteSpace: 'nowrap' }}>
           <Shirt size={19} color="var(--blue-600)" aria-hidden="true" />
           <span>{t('selectedOutfitTitle')}</span>
         </h2>
 
-        {outfitConfirmed && (
-          <span
-            style={{
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              color: 'var(--green-600)',
-              background: 'var(--green-50)',
-              border: '1px solid var(--green-border)',
-              padding: '3px 9px',
-              borderRadius: '999px',
-            }}
-          >
-            {t('outfitChosen')}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {outfitConfirmed && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                color: 'var(--green-600)',
+                background: 'var(--green-50)',
+                border: '1px solid var(--green-border)',
+                padding: '3px 9px',
+                borderRadius: '999px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Check size={12} aria-hidden="true" />
+              <span>{t('outfitChosen')}</span>
+            </span>
+          )}
+
+          {item && onClearSelection && (
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => {
+                setCartFeedback(null);
+                onClearSelection();
+              }}
+              title={t('clearSelectionBtn')}
+              aria-label={t('clearSelectionBtn')}
+              style={{ padding: '4px 9px', fontSize: '0.74rem', whiteSpace: 'nowrap' }}
+            >
+              <X size={13} aria-hidden="true" />
+              <span>{t('clearSelectionBtn')}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {error ? (
@@ -289,34 +355,114 @@ export function SelectedOutfitCard({
             )}
           </div>
 
-          {/* Action Row: Choose Outfit + Buy Now */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className={`btn ${
-                outfitConfirmed && !tryOnActive ? 'btn-secondary' : 'btn-navy'
+          {cartFeedback && (
+            <div
+              className={`banner ${
+                cartFeedback.ok ? 'banner-info' : 'banner-error'
               }`}
-              onClick={onChooseOutfit}
-              style={{ flex: 1, minWidth: 150 }}
+              style={{
+                padding: '8px 10px',
+                fontSize: '0.79rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
             >
-              <Check size={16} aria-hidden="true" />
-              <span>
-                {tryOnActive
-                  ? t('closeTryOn')
-                  : outfitConfirmed
-                  ? t('outfitConfirmed')
-                  : t('chooseOutfit')}
-              </span>
-            </button>
+              <span>{cartFeedback.message}</span>
+              {cartFeedback.ok && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setCartDrawerOpen(true)}
+                >
+                  {t('viewCartBtn')}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Action Rows: Row 1 (Choose/Undo + Add to Cart), Row 2 (Full-width Buy Now) */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              marginTop: 'auto',
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button
+                type="button"
+                className={`btn ${
+                  outfitConfirmed && !tryOnActive ? 'btn-secondary' : 'btn-navy'
+                }`}
+                onClick={onChooseOutfit}
+                aria-pressed={outfitConfirmed}
+                title={
+                  outfitConfirmed && !tryOnActive
+                    ? `${t('outfitConfirmed')} — ${t('undoOutfitConfirm')}`
+                    : undefined
+                }
+                style={{
+                  width: '100%',
+                  minWidth: 0,
+                  padding: '0 10px',
+                  overflow: 'hidden',
+                }}
+              >
+                {outfitConfirmed && !tryOnActive ? (
+                  <X size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
+                ) : (
+                  <Check size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
+                )}
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tryOnActive
+                    ? t('closeTryOn')
+                    : outfitConfirmed
+                    ? t('undoOutfitConfirm')
+                    : t('chooseOutfit')}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleAddToCart}
+                style={{
+                  width: '100%',
+                  minWidth: 0,
+                  padding: '0 10px',
+                  overflow: 'hidden',
+                }}
+              >
+                <ShoppingCart size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {t('addToCart')}
+                </span>
+              </button>
+            </div>
 
             <button
               type="button"
               className="btn btn-primary"
               onClick={handleProceedToCheckout}
-              style={{ flex: 1.1, minWidth: 160 }}
+              style={{ width: '100%' }}
             >
               <ShoppingBag size={16} aria-hidden="true" />
-              <span>{t('proceedToCheckout')}</span>
+              <span>{t('buyNow')}</span>
             </button>
           </div>
         </>

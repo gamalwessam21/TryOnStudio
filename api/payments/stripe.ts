@@ -11,8 +11,34 @@ interface CatalogDetailResponse {
   availableSizes?: string[];
 }
 
+interface BackendOrderItemDto {
+  fashionItemId: number;
+  productName?: string | null;
+  categoryName?: string | null;
+  variantId?: number | null;
+  colorName?: string | null;
+  imageUrl?: string | null;
+  size?: string | null;
+  quantity: number;
+  unitPriceEgp: number;
+  unitPriceUsd?: number;
+  lineTotalEgp: number;
+}
+
+interface BackendOrderDto {
+  orderNumber: string;
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  orderStatus?: string | null;
+  subtotalEgp: number;
+  discountEgp: number;
+  finalTotalEgp: number;
+  items?: BackendOrderItemDto[] | null;
+}
+
 interface CreateStripeSessionBody {
   orderNumber?: unknown;
+  receiptAccessToken?: unknown;
   fashionItemId?: unknown;
   variantId?: unknown;
   size?: unknown;
@@ -149,11 +175,10 @@ export async function POST(request: Request): Promise<Response> {
 
   const orderNumber =
     typeof body.orderNumber === 'string' ? body.orderNumber.trim() : '';
-  const fashionItemId = Number(body.fashionItemId);
-  const variantId = body.variantId !== undefined && body.variantId !== null ? Number(body.variantId) : null;
-  const size = typeof body.size === 'string' && body.size.trim() ? body.size.trim() : null;
-  const quantity = Math.floor(Number(body.quantity));
-  const verifiedDiscountEgp = Math.max(0, Number(body.verifiedDiscountEgp || 0));
+  const receiptAccessToken =
+    typeof body.receiptAccessToken === 'string' && body.receiptAccessToken.trim()
+      ? body.receiptAccessToken.trim()
+      : null;
   const idempotencyKey =
     typeof body.idempotencyKey === 'string' && body.idempotencyKey.trim()
       ? body.idempotencyKey.trim().slice(0, 120)
@@ -170,73 +195,224 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (!Number.isInteger(fashionItemId) || fashionItemId <= 0 || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
-    return Response.json(
-      { error: 'Invalid product or quantity for payment session.', code: 'invalid_line_item' },
-      { status: 400 }
-    );
-  }
-
-  // Authoritative server-side price & variant lookup from the catalog backend
   const catalogBase = getCatalogBaseUrl();
-  let itemDetail: CatalogDetailResponse;
-  try {
-    const itemRes = await fetch(
-      `${catalogBase}/api/fashion-items/${encodeURIComponent(String(fashionItemId))}`,
-      { headers: { Accept: 'application/json' } }
-    );
-    if (!itemRes.ok) {
+  const origin = new URL(request.url).origin;
+  const successUrl = `${origin}/orders/${encodeURIComponent(orderNumber)}?session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${origin}/orders/${encodeURIComponent(orderNumber)}?payment=cancelled`;
+
+  let finalTotalEgp = 0;
+  let sessionProductName = `Try On Studio Order ${orderNumber}`;
+  let sessionProductDescription: string | null = null;
+  let sessionProductImage: string | null = null;
+  let primaryFashionItemId: string | null = null;
+  let primarySize: string | null = null;
+
+  if (receiptAccessToken) {
+    // New Multi-Product Authoritative Order Flow:
+    // Fetch the persisted order directly from the ASP.NET backend using X-Receipt-Token.
+    let backendOrder: BackendOrderDto;
+    try {
+      const orderRes = await fetch(
+        `${catalogBase}/api/orders/${encodeURIComponent(orderNumber)}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'X-Receipt-Token': receiptAccessToken,
+          },
+        }
+      );
+
+      if (orderRes.status === 404) {
+        return Response.json(
+          {
+            error: 'Order could not be verified on the backend or receipt token is invalid.',
+            code: 'order_not_found',
+          },
+          { status: 404 }
+        );
+      }
+
+      if (!orderRes.ok) {
+        return Response.json(
+          {
+            error: 'Unable to verify order details from the backend.',
+            code: 'backend_order_error',
+          },
+          { status: 502 }
+        );
+      }
+
+      backendOrder = (await orderRes.json()) as BackendOrderDto;
+    } catch (err) {
+      console.error('[payments/stripe] Failed to fetch authoritative order:', err);
       return Response.json(
-        { error: 'Selected catalog product could not be verified on the server.', code: 'item_not_found' },
-        { status: 404 }
+        {
+          error: 'Unable to reach the order backend to verify payment amount.',
+          code: 'backend_order_unreachable',
+        },
+        { status: 502 }
       );
     }
-    itemDetail = (await itemRes.json()) as CatalogDetailResponse;
-  } catch (err) {
-    console.error('[payments/stripe] Failed to verify catalog item price:', err);
-    return Response.json(
-      { error: 'Unable to verify product price from catalog backend.', code: 'catalog_unreachable' },
-      { status: 502 }
-    );
+
+    if (!backendOrder || backendOrder.orderNumber !== orderNumber) {
+      return Response.json(
+        { error: 'Order verification mismatch.', code: 'order_mismatch' },
+        { status: 400 }
+      );
+    }
+
+    if ((backendOrder.paymentMethod ?? '').toLowerCase() !== 'stripe') {
+      return Response.json(
+        {
+          error: 'This order is not configured for online card payment.',
+          code: 'not_stripe_order',
+        },
+        { status: 400 }
+      );
+    }
+
+    const paymentStatus = (backendOrder.paymentStatus ?? '').toLowerCase();
+    const orderStatus = (backendOrder.orderStatus ?? '').toLowerCase();
+
+    if (paymentStatus === 'paid') {
+      return Response.json(
+        {
+          error: 'This order has already been paid.',
+          code: 'order_already_paid',
+        },
+        { status: 409 }
+      );
+    }
+
+    if (
+      paymentStatus === 'cancelled' ||
+      paymentStatus === 'refunded' ||
+      orderStatus === 'cancelled' ||
+      orderStatus === 'refunded'
+    ) {
+      return Response.json(
+        {
+          error: 'This order is no longer eligible for payment.',
+          code: 'order_ineligible',
+        },
+        { status: 409 }
+      );
+    }
+
+    finalTotalEgp = Math.round(Number(backendOrder.finalTotalEgp));
+    const orderItems = Array.isArray(backendOrder.items) ? backendOrder.items : [];
+
+    if (orderItems.length === 1) {
+      const first = orderItems[0];
+      const parts = [first.productName || `Item #${first.fashionItemId}`];
+      if (first.colorName) parts.push(first.colorName);
+      if (first.size) parts.push(`Size ${first.size}`);
+      sessionProductName = `${parts.join(' — ')} (×${first.quantity})`;
+      sessionProductImage = first.imageUrl ?? null;
+      primaryFashionItemId = String(first.fashionItemId);
+      primarySize = first.size ?? null;
+    } else if (orderItems.length > 1) {
+      const totalUnits = orderItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
+      sessionProductName = `Try On Studio Order ${orderNumber} (${orderItems.length} items, ${totalUnits} units)`;
+      sessionProductDescription = orderItems
+        .map(
+          (i) =>
+            `${i.productName || `Item #${i.fashionItemId}`}${
+              i.colorName ? ` (${i.colorName})` : ''
+            }${i.size ? ` [${i.size}]` : ''} ×${i.quantity}`
+        )
+        .join(', ')
+        .slice(0, 450);
+      sessionProductImage = orderItems[0]?.imageUrl ?? null;
+      primaryFashionItemId = String(orderItems[0].fashionItemId);
+      primarySize = orderItems[0].size ?? null;
+    }
+  } else {
+    // Legacy Single-Item Fallback Contract for external/mobile callers
+    const fashionItemId = Number(body.fashionItemId);
+    const variantId =
+      body.variantId !== undefined && body.variantId !== null
+        ? Number(body.variantId)
+        : null;
+    const size =
+      typeof body.size === 'string' && body.size.trim()
+        ? body.size.trim()
+        : null;
+    const quantity = Math.floor(Number(body.quantity));
+    const verifiedDiscountEgp = Math.max(0, Number(body.verifiedDiscountEgp || 0));
+
+    if (
+      !Number.isInteger(fashionItemId) ||
+      fashionItemId <= 0 ||
+      !Number.isInteger(quantity) ||
+      quantity < 1 ||
+      quantity > 20
+    ) {
+      return Response.json(
+        { error: 'Invalid product or quantity for payment session.', code: 'invalid_line_item' },
+        { status: 400 }
+      );
+    }
+
+    let itemDetail: CatalogDetailResponse;
+    try {
+      const itemRes = await fetch(
+        `${catalogBase}/api/fashion-items/${encodeURIComponent(String(fashionItemId))}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      if (!itemRes.ok) {
+        return Response.json(
+          { error: 'Selected catalog product could not be verified on the server.', code: 'item_not_found' },
+          { status: 404 }
+        );
+      }
+      itemDetail = (await itemRes.json()) as CatalogDetailResponse;
+    } catch (err) {
+      console.error('[payments/stripe] Failed to verify catalog item price:', err);
+      return Response.json(
+        { error: 'Unable to verify product price from catalog backend.', code: 'catalog_unreachable' },
+        { status: 502 }
+      );
+    }
+
+    if (
+      Array.isArray(itemDetail.availableSizes) &&
+      itemDetail.availableSizes.length > 0 &&
+      (!size || !itemDetail.availableSizes.includes(size))
+    ) {
+      return Response.json(
+        { error: 'Selected size is not offered for this product.', code: 'invalid_size' },
+        { status: 400 }
+      );
+    }
+
+    const matchedVariant =
+      variantId !== null
+        ? itemDetail.variants?.find((v) => v.id === variantId)
+        : itemDetail.variants?.[0];
+
+    const usdToEgpRate = getUsdToEgpRate();
+    const unitPriceEgp = Math.round(itemDetail.price * usdToEgpRate);
+    const subtotalEgp = unitPriceEgp * quantity;
+    const clampedDiscountEgp = Math.min(subtotalEgp, Math.round(verifiedDiscountEgp));
+    finalTotalEgp = Math.max(0, subtotalEgp - clampedDiscountEgp);
+
+    const labelParts = [itemDetail.name];
+    if (matchedVariant?.colorName) labelParts.push(matchedVariant.colorName);
+    if (size) labelParts.push(`Size ${size}`);
+    sessionProductName = `${labelParts.join(' — ')} (×${quantity})`;
+    sessionProductImage = matchedVariant?.imageUrl ?? null;
+    primaryFashionItemId = String(itemDetail.id);
+    primarySize = size;
   }
-
-  if (
-    Array.isArray(itemDetail.availableSizes) &&
-    itemDetail.availableSizes.length > 0 &&
-    (!size || !itemDetail.availableSizes.includes(size))
-  ) {
-    return Response.json(
-      { error: 'Selected size is not offered for this product.', code: 'invalid_size' },
-      { status: 400 }
-    );
-  }
-
-  const matchedVariant =
-    variantId !== null
-      ? itemDetail.variants?.find((v) => v.id === variantId)
-      : itemDetail.variants?.[0];
-
-  const usdToEgpRate = getUsdToEgpRate();
-  const unitPriceEgp = Math.round(itemDetail.price * usdToEgpRate);
-  const subtotalEgp = unitPriceEgp * quantity;
-  const clampedDiscountEgp = Math.min(subtotalEgp, Math.round(verifiedDiscountEgp));
-  const finalTotalEgp = Math.max(0, subtotalEgp - clampedDiscountEgp);
 
   // Stripe requires positive charge amount in piastres (1 EGP = 100 piastres)
-  if (finalTotalEgp <= 0) {
+  if (!Number.isFinite(finalTotalEgp) || finalTotalEgp <= 0) {
     return Response.json(
       { error: 'Final payable total is zero; online card payment is not needed.', code: 'zero_payable_total' },
       { status: 400 }
     );
   }
-
-  const origin = new URL(request.url).origin;
-  const successUrl = `${origin}/orders/${encodeURIComponent(orderNumber)}?session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${origin}/orders/${encodeURIComponent(orderNumber)}?payment=cancelled`;
-
-  const labelParts = [itemDetail.name];
-  if (matchedVariant?.colorName) labelParts.push(matchedVariant.colorName);
-  if (size) labelParts.push(`Size ${size}`);
 
   const params = new URLSearchParams();
   params.set('mode', 'payment');
@@ -244,14 +420,24 @@ export async function POST(request: Request): Promise<Response> {
   params.set('cancel_url', cancelUrl);
   params.set('client_reference_id', orderNumber);
   params.set('metadata[orderNumber]', orderNumber);
-  params.set('metadata[fashionItemId]', String(itemDetail.id));
-  if (size) params.set('metadata[size]', size);
+  if (primaryFashionItemId) {
+    params.set('metadata[fashionItemId]', primaryFashionItemId);
+  }
+  if (primarySize) {
+    params.set('metadata[size]', primarySize);
+  }
   params.set('line_items[0][quantity]', '1');
   params.set('line_items[0][price_data][currency]', 'egp');
   params.set('line_items[0][price_data][unit_amount]', String(finalTotalEgp * 100));
-  params.set('line_items[0][price_data][product_data][name]', `${labelParts.join(' — ')} (×${quantity})`);
-  if (matchedVariant?.imageUrl) {
-    params.set('line_items[0][price_data][product_data][images][0]', matchedVariant.imageUrl);
+  params.set('line_items[0][price_data][product_data][name]', sessionProductName);
+  if (sessionProductDescription) {
+    params.set(
+      'line_items[0][price_data][product_data][description]',
+      sessionProductDescription
+    );
+  }
+  if (sessionProductImage) {
+    params.set('line_items[0][price_data][product_data][images][0]', sessionProductImage);
   }
 
   try {
@@ -295,4 +481,3 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 }
-

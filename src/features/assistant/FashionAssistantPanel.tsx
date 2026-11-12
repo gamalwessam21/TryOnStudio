@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Send,
   ShoppingBag,
+  ShoppingCart,
   Sparkles,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -149,17 +150,22 @@ export function FashionAssistantPanel({
     assistantSending,
     assistantError,
     assistantConfigured,
+    assistantModel,
+    latestScannedSize,
     stylePreferences,
     setStylePreferences,
     sendAssistantPrompt,
     retryLastAssistantPrompt,
     clearAssistantChat,
     prepareCheckoutFromItem,
+    addToCart,
+    setCartDrawerOpen,
   } = useCommerce();
 
   const [inputValue, setInputValue] = useState('');
   const [showPrefs, setShowPrefs] = useState(false);
   const [openingBuyId, setOpeningBuyId] = useState<number | null>(null);
+  const [addingCartId, setAddingCartId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
@@ -215,6 +221,36 @@ export function FashionAssistantPanel({
     }
   };
 
+  const handleAddToCartRecommended = async (itemId: number) => {
+    setAddingCartId(itemId);
+    try {
+      const details =
+        selectedItemDetails?.id === itemId
+          ? selectedItemDetails
+          : await fashionApi.getFashionItemDetails(itemId);
+      const defaultSize =
+        details.availableSizes && details.availableSizes.length > 0
+          ? details.availableSizes[0]
+          : null;
+      const res = addToCart({
+        item: details,
+        variant: details.variants?.[0] ?? null,
+        size: defaultSize,
+        quantity: 1,
+      });
+      if (res.ok) {
+        onNavigateAway?.();
+        setCartDrawerOpen(true);
+      }
+    } catch {
+      selectItem(itemId);
+      onNavigateAway?.();
+      navigate(`/?item=${itemId}`);
+    } finally {
+      setAddingCartId(null);
+    }
+  };
+
   const starters = language === 'ar' ? STARTERS_AR : STARTERS_EN;
   const contextualStarter = selectedItemDetails
     ? language === 'ar'
@@ -235,7 +271,24 @@ export function FashionAssistantPanel({
             <Sparkles size={18} />
           </div>
           <div>
-            <h2 className="assistant-title">{t('stylistTitle')}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <h2 className="assistant-title">{t('stylistTitle')}</h2>
+              {assistantModel && (
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '2px 7px',
+                    borderRadius: '999px',
+                    background: 'var(--bg-surface-subtle)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  <bdi dir="ltr">{assistantModel}</bdi>
+                </span>
+              )}
+            </div>
             {!compact && (
               <p className="assistant-subtitle">{t('stylistSubtitle')}</p>
             )}
@@ -355,13 +408,23 @@ export function FashionAssistantPanel({
       )}
 
       {/* Active Studio Context Strip */}
-      {selectedItemDetails && (
+      {(selectedItemDetails || latestScannedSize) && (
         <div className="assistant-context-strip">
           <span className="assistant-context-dot" aria-hidden="true" />
           <span>
-            {language === 'ar' ? 'القطعة المحددة حالياً:' : 'Active item context:'}{' '}
-            <strong>{selectedItemDetails.name}</strong>
-            {selectedVariant?.colorName ? ` (${selectedVariant.colorName})` : ''}
+            {selectedItemDetails && (
+              <>
+                {language === 'ar' ? 'القطعة المحددة حالياً:' : 'Active item context:'}{' '}
+                <strong>{selectedItemDetails.name}</strong>
+                {selectedVariant?.colorName ? ` (${selectedVariant.colorName})` : ''}
+              </>
+            )}
+            {latestScannedSize && (
+              <span style={{ marginInlineStart: selectedItemDetails ? 8 : 0 }}>
+                {language === 'ar' ? '• المقاس الممسوح:' : '• Scanned Size:'}{' '}
+                <strong>{latestScannedSize}</strong>
+              </span>
+            )}
           </span>
           {contextualStarter && assistantMessages.length === 0 && (
             <button
@@ -455,7 +518,7 @@ export function FashionAssistantPanel({
                                   <bdi dir="ltr">(${rec.priceUsd.toFixed(2)})</bdi>
                                 </span>
                               </div>
-                              <div className="assistant-rec-actions">
+                              <div className="assistant-rec-actions" style={{ flexWrap: 'wrap' }}>
                                 <button
                                   type="button"
                                   className="btn btn-sm btn-primary"
@@ -467,6 +530,15 @@ export function FashionAssistantPanel({
                                 <button
                                   type="button"
                                   className="btn btn-sm btn-secondary"
+                                  disabled={addingCartId === rec.id}
+                                  onClick={() => void handleAddToCartRecommended(rec.id)}
+                                >
+                                  <ShoppingCart size={12} aria-hidden="true" />
+                                  <span>{t('addToCart')}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-accent"
                                   disabled={openingBuyId === rec.id}
                                   onClick={() => void handleBuyRecommended(rec.id)}
                                 >
@@ -540,7 +612,18 @@ export function FashionAssistantPanel({
             <span>{t('stylistSend')}</span>
           </button>
         </div>
-        <div className="assistant-privacy-hint">{t('stylistSessionNote')}</div>
+        <div
+          className="assistant-privacy-hint"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span>{t('stylistSessionNote')}</span>
+          <span dir="ltr">{inputValue.length}/1200</span>
+        </div>
       </form>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Camera,
   CameraOff,
@@ -6,6 +6,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useStudio } from '../StudioContext';
+import { useCommerce } from '../CommerceContext';
 import { useCamera } from '../../hooks/useCamera';
 import { useSizeScan } from '../../features/size-scan/useSizeScan';
 import { SizeScanPanel } from '../../features/size-scan/SizeScanPanel';
@@ -29,12 +30,36 @@ export function SizeGuidePage() {
     selectedVariant,
     selectItem,
   } = useStudio();
+  const { setLatestScannedSize, setSelectedPurchaseSize } = useCommerce();
 
   const sizeScan = useSizeScan();
   const camera = useCamera(() => {
     sizeScan.cancelSizeScan();
   });
   const lastSecRef = useRef<number>(3);
+
+  useEffect(() => {
+    if (!sizeScan.scanResult) return;
+    const displaySize =
+      sizeScan.scanResult.borderline && sizeScan.scanResult.sizeRange
+        ? sizeScan.scanResult.sizeRange
+        : sizeScan.scanResult.size;
+    if (displaySize) {
+      setLatestScannedSize(displaySize);
+    }
+    const exactSize = sizeScan.scanResult.size;
+    if (
+      exactSize &&
+      selectedItemDetails?.availableSizes?.includes(exactSize)
+    ) {
+      setSelectedPurchaseSize(exactSize);
+    }
+  }, [
+    sizeScan.scanResult,
+    selectedItemDetails,
+    setLatestScannedSize,
+    setSelectedPurchaseSize,
+  ]);
 
   const catalogList = allCatalogItems.length > 0 ? allCatalogItems : items;
   const eligibility = getSizeScanEligibility(selectedItemDetails, categories);

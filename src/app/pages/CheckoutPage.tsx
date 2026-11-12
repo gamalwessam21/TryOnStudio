@@ -1,27 +1,40 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowRight,
   ArrowLeft,
   Check,
+  Clock,
   CreditCard,
+  ExternalLink,
   Gift,
   KeyRound,
   Loader2,
   Lock,
   Minus,
   Plus,
+  RefreshCw,
   ShieldCheck,
+  ShoppingBag,
+  Trash2,
   Truck,
+  Zap,
 } from 'lucide-react';
 import { useCommerce } from '../CommerceContext';
 import { useStudio } from '../StudioContext';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { GarmentImage } from '../../components/GarmentImage';
-import { commerceApi, isBackendEndpointMissing } from '../../services/commerceApi';
-import type { CreateOrderPayload, PaymentMethodType, PersistedOrder } from '../../types/commerce';
+import { commerceApi } from '../../services/commerceApi';
+import { ApiError } from '../../services/fashionApi';
+import type {
+  CartItem,
+  CreateOrderPayload,
+  PaymentMethodType,
+  PersistedOrder,
+} from '../../types/commerce';
 import {
+  buildCartLineKey,
   evaluatePointsRedemption,
   formatDualPrice,
   formatEgp,
@@ -32,10 +45,21 @@ import {
 export function CheckoutPage() {
   const { language, isRtl, t } = useLanguage();
   const {
+    cartItems,
+    cartTotalQuantity,
+    updateCartItemQuantity,
+    updateCartItemSize,
+    updateCartItemVariant,
+    removeCartItem,
+    clearCart,
+    checkoutMode,
+    cartCheckoutReady,
+    startCartCheckout,
+    clearCheckoutDraft,
     checkoutDraft,
-    selectedPurchaseSize,
     updateCheckoutQuantity,
     updateCheckoutSize,
+    updateCheckoutVariant,
     usdToEgpRate,
     stripeConfigured,
     stripeMode,
@@ -43,12 +67,17 @@ export function CheckoutPage() {
     loyaltyBackendAvailable,
     loyaltyAccount,
     loyaltyVerificationToken,
+    loyaltyError,
+    loyaltyRetryAfterSeconds,
     requestCustomerVerification,
     confirmCustomerVerification,
+    refreshLoyaltyAccount,
+    handleLoyaltyUnauthorized,
     recordConfirmedOrder,
+    saveReceiptToken,
   } = useCommerce();
 
-  const { selectedItemDetails, selectedVariant } = useStudio();
+  const { itemDetailsCache, ensureItemDetails } = useStudio();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -60,34 +89,69 @@ export function CheckoutPage() {
   const [formErrors, setFormErrors] = useState<{ fullName?: string; phone?: string }>({});
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [cartNotice, setCartNotice] = useState<string | null>(null);
 
-  // Loyalty verification modal/inline state
+  // If POST /api/orders succeeds for a Stripe order, but Stripe Checkout session creation fails,
+  // we hold the persisted order here so the customer can retry Stripe payment for the SAME order
+  // or open the digital receipt without creating a duplicate order.
+  const [pendingStripeOrder, setPendingStripeOrder] = useState<PersistedOrder | null>(null);
+  const [retryingStripe, setRetryingStripe] = useState(false);
+
+  // Loyalty verification inline state
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpExpiresIn, setOtpExpiresIn] = useState<number>(0);
+  const [otpRetryAfter, setOtpRetryAfter] = useState<number>(0);
 
-  // Idempotency key per checkout attempt
-  const [idempotencyKey] = useState<string>(() => generateIdempotencyKey('chk'));
+  // Determine effective checkout mode & active lines (never fallback to Studio selection when cart is empty)
+  const isBuyNowMode = checkoutMode === 'buy_now' && Boolean(checkoutDraft);
 
-  // Ensure draft is present or sync from StudioContext if missing
-  const activeItem = checkoutDraft ?? (selectedItemDetails ? {
-    fashionItemId: selectedItemDetails.id,
-    name: selectedItemDetails.name,
-    categoryName: selectedItemDetails.categoryName,
-    variantId: selectedVariant?.id ?? selectedItemDetails.variants?.[0]?.id ?? null,
-    colorName: selectedVariant?.colorName ?? selectedItemDetails.variants?.[0]?.colorName ?? null,
-    colorHex: selectedVariant?.colorHex ?? selectedItemDetails.variants?.[0]?.colorHex ?? null,
-    imageUrl: selectedVariant?.imageUrl ?? selectedItemDetails.variants?.[0]?.imageUrl ?? null,
-    size: selectedPurchaseSize,
-    availableSizes: selectedItemDetails.availableSizes ?? [],
-    quantity: 1,
-    unitPriceUsd: selectedItemDetails.price,
-  } : null);
+  const buyNowLine: CartItem | null = useMemo(() => {
+    if (!checkoutDraft) return null;
+    return {
+      ...checkoutDraft,
+      lineKey: buildCartLineKey(
+        checkoutDraft.fashionItemId,
+        checkoutDraft.variantId,
+        checkoutDraft.size
+      ),
+    };
+  }, [checkoutDraft]);
+
+  const activeLines: CartItem[] = useMemo(() => {
+    if (isBuyNowMode) {
+      return buyNowLine ? [buyNowLine] : [];
+    }
+    if (cartCheckoutReady) {
+      return cartItems;
+    }
+    return [];
+  }, [isBuyNowMode, buyNowLine, cartCheckoutReady, cartItems]);
+
+  // Validate active checkout items against live catalog details
+  useEffect(() => {
+    activeLines.forEach((line) => {
+      if (!itemDetailsCache[line.fashionItemId]) {
+        void ensureItemDetails(line.fashionItemId);
+      }
+    });
+  }, [activeLines, itemDetailsCache, ensureItemDetails]);
+
+  // Countdown timers for OTP validity and rate-limit retry
+  useEffect(() => {
+    if (otpExpiresIn <= 0 && otpRetryAfter <= 0) return;
+    const timer = window.setInterval(() => {
+      setOtpExpiresIn((prev) => (prev > 0 ? prev - 1 : 0));
+      setOtpRetryAfter((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [otpExpiresIn, otpRetryAfter]);
 
   // If redirected with cancel status from Stripe
   useEffect(() => {
-    if (searchParams.get('stripe') === 'cancelled') {
+    if (searchParams.get('stripe') === 'cancelled' || searchParams.get('payment') === 'cancelled') {
       setSubmissionError(
         language === 'ar'
           ? 'تم إلغاء عملية الدفع عبر Stripe. يمكنك المحاولة مرة أخرى أو اختيار الدفع عند الاستلام.'
@@ -96,12 +160,23 @@ export function CheckoutPage() {
     }
   }, [searchParams, language]);
 
-  // Derived price figures
-  const unitPriceEgp = activeItem
-    ? Math.round(activeItem.unitPriceUsd * usdToEgpRate)
-    : 0;
-  const quantity = activeItem?.quantity ?? 1;
-  const subtotalEgp = unitPriceEgp * quantity;
+  // Derived price figures using authoritative catalog price when loaded
+  const subtotalEgp = useMemo(() => {
+    return activeLines.reduce((sum, line) => {
+      const liveDetails = itemDetailsCache[line.fashionItemId];
+      const unitUsd =
+        liveDetails && typeof liveDetails.price === 'number' && liveDetails.price >= 0
+          ? liveDetails.price
+          : line.unitPriceUsd;
+      const unitEgp = Math.round(unitUsd * usdToEgpRate);
+      return sum + unitEgp * line.quantity;
+    }, 0);
+  }, [activeLines, itemDetailsCache, usdToEgpRate]);
+
+  const totalUnitsCount = useMemo(
+    () => activeLines.reduce((sum, line) => sum + line.quantity, 0),
+    [activeLines]
+  );
 
   // Points redemption calculation
   const redemptionPreview = evaluatePointsRedemption({
@@ -115,11 +190,54 @@ export function CheckoutPage() {
   const appliedDiscountEgp = redemptionPreview.valid ? redemptionPreview.discountEgp : 0;
   const finalTotalEgp = Math.max(0, subtotalEgp - appliedDiscountEgp);
 
-  // Potential points that will be earned on this purchase (if paid)
-  const potentialPointsEarned = Math.floor(finalTotalEgp / loyaltyRules.earnUnitAmountEgp) * loyaltyRules.pointsEarnedPerUnit;
+  // Potential points that will be earned on this purchase
+  const potentialPointsEarned =
+    Math.floor(finalTotalEgp / loyaltyRules.earnUnitAmountEgp) * loyaltyRules.pointsEarnedPerUnit;
+
+  // Regenerate idempotencyKey (UUID) whenever order payload inputs change
+  const payloadFingerprint = useMemo(() => {
+    return JSON.stringify({
+      mode: isBuyNowMode ? 'buy_now' : 'cart',
+      items: activeLines.map((l) => ({
+        fashionItemId: l.fashionItemId,
+        variantId: l.variantId,
+        size: l.size,
+        quantity: l.quantity,
+      })),
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      paymentMethod,
+      pointsToRedeem: appliedDiscountEgp > 0 ? redemptionPreview.pointsToRedeem : 0,
+    });
+  }, [
+    isBuyNowMode,
+    activeLines,
+    fullName,
+    phone,
+    paymentMethod,
+    appliedDiscountEgp,
+    redemptionPreview.pointsToRedeem,
+  ]);
+
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateIdempotencyKey());
+  const prevFingerprintRef = useRef(payloadFingerprint);
+
+  useEffect(() => {
+    if (prevFingerprintRef.current !== payloadFingerprint) {
+      prevFingerprintRef.current = payloadFingerprint;
+      setIdempotencyKey(generateIdempotencyKey());
+    }
+  }, [payloadFingerprint]);
+
+  const hasMissingSize = useMemo(() => {
+    return activeLines.some((line) => {
+      const liveSizes = itemDetailsCache[line.fashionItemId]?.availableSizes ?? line.availableSizes;
+      return liveSizes.length > 0 && !line.size;
+    });
+  }, [activeLines, itemDetailsCache]);
 
   const handleSendVerificationCode = async () => {
-    const errors = validateCustomerInfo(fullName, phone, language);
+    const errors = validateCustomerInfo(fullName || 'Guest Customer', phone, language);
     if (errors.phone) {
       setFormErrors((prev) => ({ ...prev, phone: errors.phone }));
       return;
@@ -130,11 +248,16 @@ export function CheckoutPage() {
     setOtpLoading(false);
     if (res.challengeSent) {
       setOtpSent(true);
+      setOtpExpiresIn(res.expiresInSeconds && res.expiresInSeconds > 0 ? res.expiresInSeconds : 300);
     } else {
+      if (res.retryAfterSeconds && res.retryAfterSeconds > 0) {
+        setOtpRetryAfter(res.retryAfterSeconds);
+      }
       setOtpError(
-        language === 'ar'
-          ? 'تعذر إرسال رمز التحقق. يرجى التأكد من رقم الهاتف أو المتابعة بدون خصم النقاط.'
-          : 'Could not send verification challenge. Please check phone number or continue without points.'
+        res.message ||
+          (language === 'ar'
+            ? 'تعذر إرسال رمز التحقق. يرجى التأكد من رقم الهاتف أو المتابعة بدون خصم النقاط.'
+            : 'Could not send verification challenge. Please check phone number or continue without points.')
       );
     }
   };
@@ -143,37 +266,91 @@ export function CheckoutPage() {
     if (!otpCode.trim()) return;
     setOtpLoading(true);
     setOtpError(null);
-    const ok = await confirmCustomerVerification(phone, otpCode.trim());
+    const verified = await confirmCustomerVerification(phone, otpCode.trim());
     setOtpLoading(false);
-    if (!ok) {
+    if (!verified) {
+      if (loyaltyRetryAfterSeconds && loyaltyRetryAfterSeconds > 0) {
+        setOtpRetryAfter(loyaltyRetryAfterSeconds);
+      }
       setOtpError(
-        language === 'ar' ? 'رمز التحقق غير صحيح.' : 'Invalid verification code.'
+        loyaltyError ||
+          (language === 'ar' ? 'رمز التحقق غير صحيح.' : 'Invalid verification code.')
       );
     } else {
       setOtpSent(false);
       setOtpCode('');
+      setOtpExpiresIn(0);
+    }
+  };
+
+  const handleRetryStripeSession = async (orderToPay: PersistedOrder) => {
+    setRetryingStripe(true);
+    setSubmissionError(null);
+    try {
+      if (orderToPay.checkoutUrl) {
+        window.location.href = orderToPay.checkoutUrl;
+        return;
+      }
+      const stripeSession = await commerceApi.createStripeCheckoutSession({
+        orderNumber: orderToPay.orderNumber,
+        receiptAccessToken: orderToPay.receiptAccessToken ?? null,
+        idempotencyKey: generateIdempotencyKey(),
+      });
+      if (stripeSession.checkoutUrl) {
+        window.location.href = stripeSession.checkoutUrl;
+        return;
+      }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : language === 'ar'
+            ? 'تعذر بدء جلسة الدفع عبر Stripe. يرجى المحاولة مرة أخرى.'
+            : 'Could not start Stripe Checkout session. Please try again.';
+      setSubmissionError(msg);
+    } finally {
+      setRetryingStripe(false);
     }
   };
 
   const handlePlaceOrder = async (e: FormEvent) => {
     e.preventDefault();
     setSubmissionError(null);
+    setCartNotice(null);
 
-    if (!activeItem) {
+    if (activeLines.length === 0) {
       setSubmissionError(
         language === 'ar'
-          ? 'يرجى اختيار منتج من الكتالوج أولاً.'
-          : 'Please select a clothing item to purchase.'
+          ? 'يرجى اختيار منتج واحد على الأقل للشراء.'
+          : 'Please select at least one clothing item to purchase.'
       );
       return;
     }
 
-    // Validate size if item offers sizes
-    if (activeItem.availableSizes.length > 0 && !activeItem.size) {
+    if (activeLines.length > 20) {
       setSubmissionError(
         language === 'ar'
-          ? 'يرجى اختيار المقاس المطلوب قبل المتابعة.'
-          : 'Please select your desired size before proceeding.'
+          ? 'الحد الأقصى للطلب الواحد هو 20 منتجاً مختلفاً.'
+          : 'Maximum of 20 distinct line items allowed per order.'
+      );
+      return;
+    }
+
+    if (hasMissingSize) {
+      setSubmissionError(
+        language === 'ar'
+          ? 'يرجى اختيار المقاس المطلوب لجميع القطع قبل المتابعة.'
+          : 'Please select a size for all garments that require a size before proceeding.'
+      );
+      return;
+    }
+
+    const invalidQty = activeLines.some((line) => line.quantity < 1 || line.quantity > 20);
+    if (invalidQty) {
+      setSubmissionError(
+        language === 'ar'
+          ? 'يجب أن تكون الكمية لكل قطعة بين 1 و 20.'
+          : 'Quantity for each item must be between 1 and 20.'
       );
       return;
     }
@@ -184,13 +361,24 @@ export function CheckoutPage() {
       return;
     }
 
+    if (paymentMethod === 'stripe' && finalTotalEgp <= 0) {
+      setSubmissionError(
+        language === 'ar'
+          ? 'لا يمكن الدفع بالبطاقة عندما يكون الإجمالي النهائي 0 ج.م. يرجى اختيار الدفع عند الاستلام أو تقليل النقاط المستبدلة.'
+          : 'Stripe Checkout cannot be used when the payable total is 0 EGP. Please choose Cash on Delivery or reduce redeemed points.'
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     const payload: CreateOrderPayload = {
-      fashionItemId: activeItem.fashionItemId,
-      variantId: activeItem.variantId,
-      size: activeItem.size,
-      quantity: activeItem.quantity,
+      items: activeLines.map((line) => ({
+        fashionItemId: line.fashionItemId,
+        variantId: line.variantId,
+        size: line.size,
+        quantity: line.quantity,
+      })),
       customer: {
         fullName: fullName.trim(),
         phone: phone.trim(),
@@ -201,69 +389,47 @@ export function CheckoutPage() {
     };
 
     try {
-      let order: PersistedOrder;
-      try {
-        order = await commerceApi.createOrder(payload, idempotencyKey);
-      } catch (err) {
-        // If the external .NET backend order endpoint is not yet mounted,
-        // create a client-persisted order record so the user flow is unblocked and
-        // the complete receipt and Stripe Hosted session work reliably.
-        if (isBackendEndpointMissing(err)) {
-          const generatedOrderNumber = `TYS-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-          order = {
-            orderNumber: generatedOrderNumber,
-            receiptNumber: `REC-${generatedOrderNumber}`,
-            transactionReference: paymentMethod === 'cod' ? `COD-${generatedOrderNumber}` : null,
-            customerName: fullName.trim(),
-            customerPhoneMasked: phone.trim(),
-            currency: 'EGP',
-            items: [
-              {
-                fashionItemId: activeItem.fashionItemId,
-                productName: activeItem.name,
-                categoryName: activeItem.categoryName,
-                variantId: activeItem.variantId,
-                colorName: activeItem.colorName,
-                imageUrl: activeItem.imageUrl,
-                size: activeItem.size,
-                quantity: activeItem.quantity,
-                unitPriceEgp,
-                unitPriceUsd: activeItem.unitPriceUsd,
-                lineTotalEgp: subtotalEgp,
-              },
-            ],
-            subtotalEgp,
-            discountEgp: appliedDiscountEgp,
-            pointsRedeemed: appliedDiscountEgp > 0 ? redemptionPreview.pointsToRedeem : 0,
-            finalTotalEgp,
-            paymentMethod,
-            paymentStatus: paymentMethod === 'cod' ? 'pending_collection' : 'pending_payment',
-            orderStatus: 'confirmed',
-            createdAt: new Date().toISOString(),
-            pointsEarned: paymentMethod === 'cod' ? potentialPointsEarned : 0,
-            updatedLoyaltyBalance: loyaltyAccount ? Math.max(0, loyaltyAccount.currentBalance - (appliedDiscountEgp > 0 ? redemptionPreview.pointsToRedeem : 0)) : null,
-          };
-        } else {
-          throw err;
-        }
-      }
+      const order = await commerceApi.createOrder(payload, idempotencyKey);
 
+      // Step 2: Immediately persist receiptAccessToken and confirmed order BEFORE redirecting or making another request
+      if (order.receiptAccessToken) {
+        saveReceiptToken(order.orderNumber, order.receiptAccessToken);
+      }
       recordConfirmedOrder(order);
 
-      // Handle Stripe Hosted Checkout redirect if chosen
-      if (paymentMethod === 'stripe') {
-        const stripeSession = await commerceApi.createStripeCheckoutSession({
-          orderNumber: order.orderNumber,
-          fashionItemId: activeItem.fashionItemId,
-          variantId: activeItem.variantId,
-          size: activeItem.size,
-          quantity: activeItem.quantity,
-          verifiedDiscountEgp: appliedDiscountEgp,
-          idempotencyKey,
-        });
+      // Clear persisted cart ONLY if this checkout was placed in 'cart' mode (never clear tys.cart for isolated 'buy_now')
+      if (!isBuyNowMode) {
+        clearCart();
+      }
 
-        if (stripeSession.checkoutUrl) {
-          window.location.href = stripeSession.checkoutUrl;
+      // Step 3 & 4: Handle Stripe Hosted Checkout redirect
+      if (paymentMethod === 'stripe') {
+        if (order.checkoutUrl) {
+          window.location.href = order.checkoutUrl;
+          return;
+        }
+
+        try {
+          const stripeSession = await commerceApi.createStripeCheckoutSession({
+            orderNumber: order.orderNumber,
+            receiptAccessToken: order.receiptAccessToken ?? null,
+            idempotencyKey,
+          });
+
+          if (stripeSession.checkoutUrl) {
+            window.location.href = stripeSession.checkoutUrl;
+            return;
+          }
+        } catch (stripeErr: unknown) {
+          console.error('[checkout] Stripe session creation failed after order creation:', stripeErr);
+          setPendingStripeOrder(order);
+          const msg =
+            stripeErr instanceof Error
+              ? stripeErr.message
+              : language === 'ar'
+                ? 'تم إنشاء الطلب بنجاح، ولكن تعذر فتح صفحة الدفع عبر Stripe. يمكنك إعادة محاولة الدفع لنفس الطلب أدناه.'
+                : 'Your order was created, but we could not open Stripe Checkout. You can safely retry payment for this order below.';
+          setSubmissionError(msg);
           return;
         }
       }
@@ -272,30 +438,174 @@ export function CheckoutPage() {
       navigate(`/orders/${encodeURIComponent(order.orderNumber)}`);
     } catch (err: unknown) {
       console.error('[checkout] Order submission error:', err);
+
+      if (err instanceof ApiError) {
+        if (err.status === 401) {
+          handleLoyaltyUnauthorized();
+          setPointsInput(0);
+          setSubmissionError(
+            language === 'ar'
+              ? 'انتهت صلاحية رمز التحقق من نقاط الولاء (30 دقيقة). يرجى إعادة التحقق من رقم هاتفك أو إتمام الطلب بدون استبدال النقاط.'
+              : 'Your loyalty verification token expired (30-minute limit). Please re-verify your phone number or submit without redeeming points.'
+          );
+          return;
+        }
+
+        if (err.status === 409 && err.code === 'balance_changed') {
+          void refreshLoyaltyAccount();
+          setPointsInput(0);
+          setSubmissionError(
+            language === 'ar'
+              ? 'تغير رصيد نقاط الولاء الخاص بك. تم تحديث الرصيد، يرجى مراجعة الخصم والمحاولة مرة أخرى.'
+              : 'Your loyalty points balance has changed. We refreshed your balance—please review your points selection and try again.'
+          );
+          return;
+        }
+
+        if (err.status === 409 && err.code === 'idempotency_key_reused') {
+          setIdempotencyKey(generateIdempotencyKey());
+          setSubmissionError(
+            language === 'ar'
+              ? 'تم تحديث مفتاح الأمان للطلب بعد تغيير البيانات. يرجى الضغط على إتمام الطلب مرة أخرى.'
+              : 'Order security key was refreshed for your updated details. Please click Place Order again.'
+          );
+          return;
+        }
+
+        if (err.status === 400 && err.code === 'zero_payable_total') {
+          setSubmissionError(
+            language === 'ar'
+              ? 'لا يمكن استخدام الدفع بالبطاقة عندما يكون المبلغ المستحق 0 ج.م. يرجى اختيار الدفع عند الاستلام أو تقليل النقاط المستبدلة.'
+              : 'Card payment is not available when the payable total is 0 EGP. Please select Cash on Delivery or reduce redeemed points.'
+          );
+          return;
+        }
+
+        if (err.status === 429) {
+          const waitSec = err.retryAfterSeconds ?? 30;
+          setSubmissionError(
+            language === 'ar'
+              ? `تم تجاوز الحد المسموح به للطلبات. يرجى الانتظار ${waitSec} ثانية قبل المحاولة مرة أخرى.`
+              : `Too many requests. Please wait ${waitSec} seconds before trying again.`
+          );
+          return;
+        }
+      }
+
       const msg = err instanceof Error ? err.message : String(err);
-      setSubmissionError(msg || (language === 'ar' ? 'تعذر إتمام الطلب.' : 'Could not complete order.'));
+      setSubmissionError(
+        msg || (language === 'ar' ? 'تعذر إتمام الطلب.' : 'Could not complete order.')
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!activeItem) {
+  // If an order was already created on the backend and is awaiting Stripe session retry
+  if (pendingStripeOrder) {
+    return (
+      <div className="checkout-page">
+        <div className="card" style={{ maxWidth: 640, margin: '32px auto', padding: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <AlertCircle size={28} color="var(--purple-600)" />
+            <div>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
+                {language === 'ar'
+                  ? 'تم حفظ طلبك — في انتظار إتمام الدفع عبر Stripe'
+                  : 'Order Saved — Awaiting Stripe Payment'}
+              </h1>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                {language === 'ar' ? 'رقم الطلب:' : 'Order Number:'}{' '}
+                <strong>
+                  <bdi>{pendingStripeOrder.orderNumber}</bdi>
+                </strong>{' '}
+                •{' '}
+                <bdi dir="ltr">{formatEgp(pendingStripeOrder.finalTotalEgp, language)}</bdi>
+              </p>
+            </div>
+          </div>
+
+          {submissionError && (
+            <div className="banner banner-error" role="alert" style={{ marginBottom: 16 }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span>{submissionError}</span>
+            </div>
+          )}
+
+          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
+            {language === 'ar'
+              ? 'تم تسجيل طلبك وحفظ رمز الوصول للإيصال بنجاح. يمكنك إعادة محاولة فتح بوابة الدفع عبر Stripe لنفس الطلب دون إنشاء طلب مكرر، أو عرض الإيصال الرقمي لمتابعة حالة الطلب.'
+              : 'Your order and receipt access token have been safely recorded. You can retry launching Stripe Checkout for this exact order without creating a duplicate order, or view your order receipt.'}
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <button
+              type="button"
+              className="btn btn-purple"
+              disabled={retryingStripe}
+              onClick={() => void handleRetryStripeSession(pendingStripeOrder)}
+            >
+              {retryingStripe ? (
+                <Loader2 size={16} className="spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              <span>
+                {language === 'ar'
+                  ? 'إعادة محاولة الدفع عبر Stripe'
+                  : 'Retry Stripe Payment'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() =>
+                navigate(`/orders/${encodeURIComponent(pendingStripeOrder.orderNumber)}`)
+              }
+            >
+              <ExternalLink size={16} />
+              <span>
+                {language === 'ar' ? 'عرض إيصال الطلب' : 'View Order Receipt'}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeLines.length === 0) {
     return (
       <div className="checkout-empty-state card">
         <AlertCircle size={40} color="var(--blue-600)" />
-        <h2>{language === 'ar' ? 'لا يوجد منتج محدد للشراء' : 'No garment selected for purchase'}</h2>
+        <h2>
+          {language === 'ar'
+            ? 'لا توجد منتجات محددة للشراء'
+            : 'No garments selected for purchase'}
+        </h2>
         <p>
           {language === 'ar'
-            ? 'تصفح الكتالوج لاختيار قطعة وتحديد اللون والمقاس قبل إتمام الشراء.'
-            : 'Browse our catalog to choose a garment, color, and size before proceeding.'}
+            ? 'تصفح الكتالوج لإضافة قطع إلى سلة التسوق أو استخدام الشراء السريع.'
+            : 'Browse our catalog to add garments to your cart or use Buy Now.'}
         </p>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => navigate('/browse')}
-        >
-          <span>{t('navBrowse')}</span>
-        </button>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => navigate('/browse')}
+          >
+            <span>{t('navBrowse')}</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => navigate('/cart')}
+          >
+            <ShoppingBag size={16} />
+            <span>{t('navCart')}</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -303,8 +613,65 @@ export function CheckoutPage() {
   return (
     <div className="checkout-page">
       <div className="checkout-header-block">
-        <h1 className="checkout-main-title">{t('checkoutTitle')}</h1>
-        <p className="checkout-main-subtitle">{t('checkoutSubtitle')}</p>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div>
+            <h1 className="checkout-main-title">{t('checkoutTitle')}</h1>
+            <p className="checkout-main-subtitle">{t('checkoutSubtitle')}</p>
+          </div>
+
+          {/* Checkout Mode Indicator & Switcher */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span
+              className="badge"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 999,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                background: isBuyNowMode ? 'var(--purple-50, #f5f3ff)' : 'var(--blue-50, #eff6ff)',
+                color: isBuyNowMode ? 'var(--purple-700, #6d28d9)' : 'var(--blue-700, #1d4ed8)',
+                border: '1px solid currentColor',
+              }}
+            >
+              {isBuyNowMode ? <Zap size={14} /> : <ShoppingBag size={14} />}
+              <span>
+                {isBuyNowMode
+                  ? language === 'ar'
+                    ? 'وضع الشراء السريع (معزول عن السلة)'
+                    : 'Express Buy Now Mode (Isolated from Cart)'
+                  : language === 'ar'
+                    ? `إتمام شراء السلة (${activeLines.length} منتجات)`
+                    : `Cart Checkout (${activeLines.length} ${activeLines.length === 1 ? 'item' : 'items'})`}
+              </span>
+            </span>
+
+            {isBuyNowMode && cartTotalQuantity > 0 && (
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => startCartCheckout()}
+              >
+                <ShoppingBag size={14} />
+                <span>
+                  {language === 'ar'
+                    ? `التبديل إلى سلة التسوق (${cartTotalQuantity})`
+                    : `Switch to Saved Cart (${cartTotalQuantity})`}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {submissionError && (
@@ -314,108 +681,266 @@ export function CheckoutPage() {
         </div>
       )}
 
+      {cartNotice && (
+        <div className="banner banner-info" role="status" style={{ marginBottom: 16 }}>
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <span>{cartNotice}</span>
+        </div>
+      )}
+
       <form className="checkout-grid" onSubmit={(e) => void handlePlaceOrder(e)}>
-        {/* Left Column: Line Item + Customer Info + Payment + Loyalty */}
+        {/* Left Column: Line Items + Customer Info + Payment + Loyalty */}
         <div className="checkout-form-col">
-          {/* Step 1: Selected Item Summary & Size Picker */}
-          <section className="card checkout-card" aria-label="Selected Item">
-            <div className="checkout-card-header">
-              <span className="checkout-step-badge">1</span>
-              <h2>{language === 'ar' ? 'القطعة المحددة' : 'Selected Item'}</h2>
+          {/* Step 1: Selected Items Summary & Inline Size/Variant/Quantity Pickers */}
+          <section className="card checkout-card" aria-label="Selected Items">
+            <div
+              className="checkout-card-header"
+              style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="checkout-step-badge">1</span>
+                <h2>
+                  {isBuyNowMode
+                    ? language === 'ar'
+                      ? 'القطعة المحددة للشراء السريع'
+                      : 'Selected Item (Buy Now)'
+                    : language === 'ar'
+                      ? `منتجات الطلب (${activeLines.length})`
+                      : `Order Items (${activeLines.length})`}
+                </h2>
+              </div>
+
+              {!isBuyNowMode && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => navigate('/cart')}
+                >
+                  <ShoppingBag size={14} />
+                  <span>{language === 'ar' ? 'تعديل في السلة' : 'Edit in Cart'}</span>
+                </button>
+              )}
             </div>
 
-            <div className="checkout-item-preview">
-              <div className="checkout-item-thumb">
-                <GarmentImage
-                  src={activeItem.imageUrl}
-                  alt={activeItem.name}
-                  categoryName={activeItem.categoryName}
-                  colorHex={activeItem.colorHex ?? undefined}
-                  aspectRatio="4/5"
-                />
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {activeLines.map((line) => {
+                const liveDetails = itemDetailsCache[line.fashionItemId];
+                const availableVariants = liveDetails?.variants ?? [];
+                const availableSizes =
+                  liveDetails?.availableSizes && liveDetails.availableSizes.length > 0
+                    ? liveDetails.availableSizes
+                    : line.availableSizes;
+                const unitUsd =
+                  liveDetails && typeof liveDetails.price === 'number'
+                    ? liveDetails.price
+                    : line.unitPriceUsd;
+                const lineUnitEgp = Math.round(unitUsd * usdToEgpRate);
 
-              <div className="checkout-item-details">
-                <div className="checkout-item-cat">{activeItem.categoryName}</div>
-                <h3 className="checkout-item-name"><bdi>{activeItem.name}</bdi></h3>
-                {activeItem.colorName && (
-                  <div className="checkout-item-color">
-                    <span
-                      className="swatch-dot"
-                      style={{ backgroundColor: activeItem.colorHex || '#94a3b8' }}
-                      aria-hidden="true"
-                    />
-                    <span>{activeItem.colorName}</span>
-                  </div>
-                )}
-
-                <div className="checkout-item-price-row">
-                  <span className="checkout-item-price-egp">
-                    <bdi dir="ltr">{formatEgp(unitPriceEgp, language)}</bdi>
-                  </span>
-                  <span className="checkout-item-price-usd">
-                    <bdi dir="ltr">(${activeItem.unitPriceUsd.toFixed(2)} USD)</bdi>
-                  </span>
-                </div>
-
-                {/* Size Selection (Enforced if item offers sizes) */}
-                {activeItem.availableSizes.length > 0 && (
-                  <div className="checkout-size-selector-block">
-                    <label className="checkout-field-label">
-                      {language === 'ar' ? 'المقاس المطلوب *' : 'Selected Size *'}
-                    </label>
-                    <div className="sizes-pill-row">
-                      {activeItem.availableSizes.map((sz) => {
-                        const isChosen = activeItem.size === sz;
-                        return (
-                          <button
-                            key={sz}
-                            type="button"
-                            className={`size-chip ${isChosen ? 'active' : ''}`}
-                            onClick={() => updateCheckoutSize(sz)}
-                            aria-pressed={isChosen}
-                          >
-                            <bdi>{sz}</bdi>
-                          </button>
-                        );
-                      })}
+                return (
+                  <div
+                    key={line.lineKey}
+                    className="checkout-item-preview"
+                    style={{
+                      paddingBottom: activeLines.length > 1 ? 16 : 0,
+                      borderBottom:
+                        activeLines.length > 1 ? '1px solid var(--border-subtle, #e2e8f0)' : 'none',
+                    }}
+                  >
+                    <div className="checkout-item-thumb">
+                      <GarmentImage
+                        src={line.imageUrl}
+                        alt={line.name}
+                        categoryName={line.categoryName}
+                        colorHex={line.colorHex ?? undefined}
+                        aspectRatio="4/5"
+                      />
                     </div>
-                    {!activeItem.size && (
-                      <p className="checkout-size-warning">
-                        {t('selectSizeFirst')}
-                      </p>
-                    )}
-                  </div>
-                )}
 
-                {/* Quantity Controls */}
-                <div className="checkout-qty-row">
-                  <label className="checkout-field-label" htmlFor="qty-controls">
-                    {language === 'ar' ? 'الكمية:' : 'Quantity:'}
-                  </label>
-                  <div id="qty-controls" className="checkout-qty-controls">
-                    <button
-                      type="button"
-                      className="qty-btn"
-                      disabled={quantity <= 1}
-                      onClick={() => updateCheckoutQuantity(quantity - 1)}
-                      aria-label="Decrease quantity"
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <span className="qty-value">{quantity}</span>
-                    <button
-                      type="button"
-                      className="qty-btn"
-                      disabled={quantity >= 20}
-                      onClick={() => updateCheckoutQuantity(quantity + 1)}
-                      aria-label="Increase quantity"
-                    >
-                      <Plus size={14} />
-                    </button>
+                    <div className="checkout-item-details">
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 8,
+                        }}
+                      >
+                        <div>
+                          <div className="checkout-item-cat">{line.categoryName}</div>
+                          <h3 className="checkout-item-name">
+                            <bdi>{line.name}</bdi>
+                          </h3>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => {
+                            removeCartItem(line.lineKey);
+                            if (isBuyNowMode) {
+                              clearCheckoutDraft();
+                            }
+                          }}
+                          aria-label={
+                            language === 'ar'
+                              ? `حذف ${line.name}`
+                              : `Remove ${line.name}`
+                          }
+                          style={{ color: 'var(--red-600)' }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+
+                      {line.colorName && (
+                        <div className="checkout-item-color">
+                          <span
+                            className="swatch-dot"
+                            style={{ backgroundColor: line.colorHex || '#94a3b8' }}
+                            aria-hidden="true"
+                          />
+                          <span>{line.colorName}</span>
+                        </div>
+                      )}
+
+                      {/* Color Variant Selector if multiple variants exist */}
+                      {availableVariants.length > 1 && (
+                        <div style={{ marginTop: 8 }}>
+                          <label className="checkout-field-label" style={{ fontSize: '0.78rem' }}>
+                            {language === 'ar' ? 'اللون:' : 'Color:'}
+                          </label>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                            {availableVariants.map((v) => {
+                              const isCurrentVariant = line.variantId === v.id;
+                              return (
+                                <button
+                                  key={v.id}
+                                  type="button"
+                                  className={`size-chip ${isCurrentVariant ? 'active' : ''}`}
+                                  onClick={() => {
+                                    if (isBuyNowMode) {
+                                      updateCheckoutVariant(v);
+                                    } else {
+                                      const res = updateCartItemVariant(line.lineKey, v);
+                                      if (!res.ok && res.message) setCartNotice(res.message);
+                                      else if (res.merged) setCartNotice(res.message ?? null);
+                                    }
+                                  }}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                >
+                                  <span
+                                    className="swatch-dot"
+                                    style={{
+                                      width: 10,
+                                      height: 10,
+                                      borderRadius: '50%',
+                                      backgroundColor: v.colorHex || '#94a3b8',
+                                    }}
+                                  />
+                                  <span>{v.colorName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="checkout-item-price-row">
+                        <span className="checkout-item-price-egp">
+                          <bdi dir="ltr">{formatEgp(lineUnitEgp, language)}</bdi>
+                        </span>
+                        <span className="checkout-item-price-usd">
+                          <bdi dir="ltr">(${unitUsd.toFixed(2)} USD)</bdi>
+                        </span>
+                      </div>
+
+                      {/* Size Selection (Enforced if item offers sizes) */}
+                      {availableSizes.length > 0 && (
+                        <div className="checkout-size-selector-block">
+                          <label className="checkout-field-label">
+                            {language === 'ar' ? 'المقاس المطلوب *' : 'Selected Size *'}
+                          </label>
+                          <div className="sizes-pill-row">
+                            {availableSizes.map((sz) => {
+                              const isChosen = line.size === sz;
+                              return (
+                                <button
+                                  key={sz}
+                                  type="button"
+                                  className={`size-chip ${isChosen ? 'active' : ''}`}
+                                  onClick={() => {
+                                    if (isBuyNowMode) {
+                                      updateCheckoutSize(sz);
+                                    } else {
+                                      const res = updateCartItemSize(line.lineKey, sz);
+                                      if (!res.ok && res.message) setCartNotice(res.message);
+                                      else if (res.merged) setCartNotice(res.message ?? null);
+                                    }
+                                  }}
+                                  aria-pressed={isChosen}
+                                >
+                                  <bdi>{sz}</bdi>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {!line.size && (
+                            <p className="checkout-size-warning">{t('selectSizeFirst')}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Quantity Controls */}
+                      <div className="checkout-qty-row">
+                        <label className="checkout-field-label">
+                          {language === 'ar' ? 'الكمية:' : 'Quantity:'}
+                        </label>
+                        <div className="checkout-qty-controls">
+                          <button
+                            type="button"
+                            className="qty-btn"
+                            disabled={line.quantity <= 1}
+                            onClick={() => {
+                              if (isBuyNowMode) {
+                                updateCheckoutQuantity(line.quantity - 1);
+                              } else {
+                                const res = updateCartItemQuantity(
+                                  line.lineKey,
+                                  line.quantity - 1
+                                );
+                                if (!res.ok && res.message) setCartNotice(res.message);
+                              }
+                            }}
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="qty-value">{line.quantity}</span>
+                          <button
+                            type="button"
+                            className="qty-btn"
+                            disabled={line.quantity >= 20}
+                            onClick={() => {
+                              if (isBuyNowMode) {
+                                updateCheckoutQuantity(line.quantity + 1);
+                              } else {
+                                const res = updateCartItemQuantity(
+                                  line.lineKey,
+                                  line.quantity + 1
+                                );
+                                if (!res.ok && res.message) setCartNotice(res.message);
+                              }
+                            }}
+                            aria-label="Increase quantity"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
           </section>
 
@@ -439,7 +964,8 @@ export function CheckoutPage() {
                   value={fullName}
                   onChange={(e) => {
                     setFullName(e.target.value);
-                    if (formErrors.fullName) setFormErrors((prev) => ({ ...prev, fullName: undefined }));
+                    if (formErrors.fullName)
+                      setFormErrors((prev) => ({ ...prev, fullName: undefined }));
                   }}
                   autoComplete="name"
                   required
@@ -551,7 +1077,7 @@ export function CheckoutPage() {
                 <h2>{t('usePointsTitle')}</h2>
               </div>
               <span className="loyalty-rate-pill">
-                100 pts = {loyaltyRules.redemptionBlockValueEgp} EGP
+                {loyaltyRules.redemptionBlockPoints} pts = {loyaltyRules.redemptionBlockValueEgp} EGP
               </span>
             </div>
 
@@ -569,7 +1095,7 @@ export function CheckoutPage() {
                     type="button"
                     className="btn btn-sm btn-purple"
                     onClick={() => void handleSendVerificationCode()}
-                    disabled={otpLoading || !phone.trim()}
+                    disabled={otpLoading || otpRetryAfter > 0 || !phone.trim()}
                   >
                     {otpLoading ? (
                       <Loader2 size={14} className="spin" />
@@ -577,30 +1103,72 @@ export function CheckoutPage() {
                       <KeyRound size={14} />
                     )}
                     <span>
-                      {language === 'ar'
-                        ? 'إرسال رمز التحقق لرقمي'
-                        : 'Verify My Phone for Points'}
+                      {otpRetryAfter > 0
+                        ? language === 'ar'
+                          ? `يرجى الانتظار (${otpRetryAfter}ث)`
+                          : `Wait (${otpRetryAfter}s)`
+                        : language === 'ar'
+                          ? 'إرسال رمز التحقق لرقمي'
+                          : 'Verify My Phone for Points'}
                     </span>
                   </button>
                 ) : (
-                  <div className="loyalty-otp-input-row">
-                    <input
-                      type="text"
-                      className="checkout-input otp"
-                      placeholder="Enter 6-digit code (e.g. 123456)"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      maxLength={8}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-primary"
-                      onClick={() => void handleConfirmVerificationCode()}
-                      disabled={otpLoading || !otpCode.trim()}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div className="loyalty-otp-input-row">
+                      <input
+                        type="text"
+                        className="checkout-input otp"
+                        placeholder="Enter 6-digit code (e.g. 123456)"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value)}
+                        maxLength={8}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => void handleConfirmVerificationCode()}
+                        disabled={otpLoading || otpRetryAfter > 0 || !otpCode.trim()}
+                      >
+                        {otpLoading ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+                        <span>{language === 'ar' ? 'تأكيد' : 'Confirm'}</span>
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                      }}
                     >
-                      {otpLoading ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
-                      <span>{language === 'ar' ? 'تأكيد' : 'Confirm'}</span>
-                    </button>
+                      {otpExpiresIn > 0 ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Clock size={12} />
+                          {language === 'ar'
+                            ? `ينتهي الرمز خلال ${otpExpiresIn} ثانية`
+                            : `Code expires in ${otpExpiresIn}s`}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--red-600)' }}>
+                          {language === 'ar'
+                            ? 'انتهت صلاحية الرمز. اطلب رمزاً جديداً.'
+                            : 'Code expired. Request a new code.'}
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        disabled={otpLoading || otpRetryAfter > 0}
+                        onClick={() => void handleSendVerificationCode()}
+                      >
+                        <span>
+                          {language === 'ar' ? 'إرسال رمز جديد' : 'Request New Code'}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -619,7 +1187,10 @@ export function CheckoutPage() {
                   <ShieldCheck size={18} color="var(--green-600)" />
                   <span>
                     {language === 'ar' ? 'الرصيد المتاح:' : 'Available Balance:'}{' '}
-                    <strong>{loyaltyAccount?.currentBalance ?? 0} {language === 'ar' ? 'نقطة' : 'points'}</strong>
+                    <strong>
+                      {loyaltyAccount?.currentBalance ?? 0}{' '}
+                      {language === 'ar' ? 'نقطة' : 'points'}
+                    </strong>
                   </span>
                 </div>
 
@@ -633,12 +1204,19 @@ export function CheckoutPage() {
                     value={pointsInput}
                     onChange={(e) => setPointsInput(Number(e.target.value))}
                   >
-                    <option value={0}>{language === 'ar' ? '0 نقاط (بدون خصم)' : '0 points (No discount)'}</option>
+                    <option value={0}>
+                      {language === 'ar' ? '0 نقاط (بدون خصم)' : '0 points (No discount)'}
+                    </option>
                     {Array.from({
-                      length: Math.floor((redemptionPreview.maxRedeemablePoints || 0) / loyaltyRules.redemptionBlockPoints),
+                      length: Math.floor(
+                        (redemptionPreview.maxRedeemablePoints || 0) /
+                          loyaltyRules.redemptionBlockPoints
+                      ),
                     }).map((_, i) => {
                       const pts = (i + 1) * loyaltyRules.redemptionBlockPoints;
-                      const disc = (pts / loyaltyRules.redemptionBlockPoints) * loyaltyRules.redemptionBlockValueEgp;
+                      const disc =
+                        (pts / loyaltyRules.redemptionBlockPoints) *
+                        loyaltyRules.redemptionBlockValueEgp;
                       return (
                         <option key={pts} value={pts}>
                           {pts} {language === 'ar' ? 'نقطة' : 'pts'} = -{formatEgp(disc, language)}
@@ -669,11 +1247,35 @@ export function CheckoutPage() {
             <h2 className="summary-title">{t('orderSummaryTitle')}</h2>
 
             <div className="summary-lines-stack">
-              <div className="summary-line">
+              {activeLines.map((line) => {
+                const liveDetails = itemDetailsCache[line.fashionItemId];
+                const unitUsd =
+                  liveDetails && typeof liveDetails.price === 'number'
+                    ? liveDetails.price
+                    : line.unitPriceUsd;
+                const lineTotal = Math.round(unitUsd * usdToEgpRate) * line.quantity;
+                return (
+                  <div key={line.lineKey} className="summary-line">
+                    <span>
+                      <bdi>{line.name}</bdi>{' '}
+                      {line.size ? `(${line.size})` : ''} × <bdi>{line.quantity}</bdi>
+                    </span>
+                    <span>
+                      <bdi dir="ltr">{formatEgp(lineTotal, language)}</bdi>
+                    </span>
+                  </div>
+                );
+              })}
+
+              <div className="summary-line" style={{ fontSize: '0.85rem', opacity: 0.85 }}>
                 <span>
-                  <bdi>{activeItem.name}</bdi> {activeItem.size ? `(${activeItem.size})` : ''} × <bdi>{quantity}</bdi>
+                  {language === 'ar'
+                    ? `إجمالي القطع (${totalUnitsCount})`
+                    : `Total Units (${totalUnitsCount})`}
                 </span>
-                <span><bdi dir="ltr">{formatEgp(subtotalEgp, language)}</bdi></span>
+                <span>
+                  <bdi dir="ltr">{formatEgp(subtotalEgp, language)}</bdi>
+                </span>
               </div>
 
               {appliedDiscountEgp > 0 && (
@@ -681,7 +1283,9 @@ export function CheckoutPage() {
                   <span>
                     {language === 'ar' ? 'خصم نقاط الولاء' : 'Loyalty Points Discount'}
                   </span>
-                  <span>-<bdi dir="ltr">{formatEgp(appliedDiscountEgp, language)}</bdi></span>
+                  <span>
+                    -<bdi dir="ltr">{formatEgp(appliedDiscountEgp, language)}</bdi>
+                  </span>
                 </div>
               )}
 
@@ -692,9 +1296,17 @@ export function CheckoutPage() {
 
               <div className="summary-line-total">
                 <div>
-                  <div className="summary-total-label">{language === 'ar' ? 'الإجمالي النهائي' : 'Final Total'}</div>
+                  <div className="summary-total-label">
+                    {language === 'ar' ? 'الإجمالي النهائي' : 'Final Total'}
+                  </div>
                   <div className="summary-total-sub">
-                    <bdi dir="ltr">{formatDualPrice((finalTotalEgp / (usdToEgpRate || 50)), usdToEgpRate, language)}</bdi>
+                    <bdi dir="ltr">
+                      {formatDualPrice(
+                        finalTotalEgp / (usdToEgpRate || 50),
+                        usdToEgpRate,
+                        language
+                      )}
+                    </bdi>
                   </div>
                 </div>
                 <div className="summary-total-amount">
@@ -703,13 +1315,17 @@ export function CheckoutPage() {
               </div>
             </div>
 
-            {/* Potential Points Banner */}
+            {/* Potential Points Banner with accurate COD vs Stripe timing */}
             <div className="summary-points-earn-banner">
               <Gift size={16} aria-hidden="true" />
               <span>
-                {language === 'ar'
-                  ? `ستكسب +${potentialPointsEarned} نقطة ولاء عند اكتمال هذا الطلب.`
-                  : `You will earn +${potentialPointsEarned} points when this order is completed.`}
+                {paymentMethod === 'cod'
+                  ? language === 'ar'
+                    ? `ستحصل على +${potentialPointsEarned} نقطة ولاء فور تأكيد طلب الدفع عند الاستلام.`
+                    : `You will earn +${potentialPointsEarned} loyalty points immediately when this COD order is placed.`
+                  : language === 'ar'
+                    ? `ستحصل على +${potentialPointsEarned} نقطة ولاء فور التحقق من الدفع الإلكتروني عبر Stripe.`
+                    : `You will earn +${potentialPointsEarned} loyalty points once Stripe card payment is verified.`}
               </span>
             </div>
 
@@ -717,7 +1333,7 @@ export function CheckoutPage() {
             <button
               type="submit"
               className={`btn ${paymentMethod === 'stripe' ? 'btn-purple' : 'btn-navy'} btn-block checkout-submit-btn`}
-              disabled={submitting || (activeItem.availableSizes.length > 0 && !activeItem.size)}
+              disabled={submitting || hasMissingSize}
             >
               {submitting ? (
                 <>
@@ -728,9 +1344,7 @@ export function CheckoutPage() {
                 <>
                   <Lock size={16} aria-hidden="true" />
                   <span>
-                    {paymentMethod === 'stripe'
-                      ? t('placeOrderStripe')
-                      : t('placeOrderCod')}
+                    {paymentMethod === 'stripe' ? t('placeOrderStripe') : t('placeOrderCod')}
                   </span>
                   {isRtl ? <ArrowLeft size={16} /> : <ArrowRight size={16} />}
                 </>
@@ -740,7 +1354,7 @@ export function CheckoutPage() {
             <div className="checkout-trust-badges">
               <span>🔒 {language === 'ar' ? 'تشفير 256-bit آمن' : '256-bit Secure'}</span>
               <span>•</span>
-              <span>{language === 'ar' ? 'أسعار شفافة' : 'Honest Pricing'}</span>
+              <span>{language === 'ar' ? 'أسعار معتمدة من الخادم' : 'Server-Verified Pricing'}</span>
               <span>•</span>
               <span>{language === 'ar' ? 'إيصال رسمي' : 'Official Receipt'}</span>
             </div>
@@ -750,4 +1364,3 @@ export function CheckoutPage() {
     </div>
   );
 }
-
