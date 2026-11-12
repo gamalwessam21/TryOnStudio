@@ -3441,30 +3441,51 @@
   pointer-events: none;
 }
 
-@media (max-width: 768px) {
+/* ==========================================================================
+   Browse Header, Cart Line Item Grid & Comprehensive Responsive Breakpoints
+   ========================================================================== */
+.browse-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.browse-filter-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cart-line-item-grid {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
   .hanging-rack-stage {
-    height: 460px;
+    height: 530px;
   }
 
   .hanging-garment-pendulum {
-    width: 220px;
+    width: 240px;
   }
 
   .hanging-garment-figure {
-    height: 250px;
+    height: 275px;
   }
 
-  .hanging-rack-topbar {
-    padding: 14px 16px 8px;
+  .loyalty-rules-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .hanging-rack-footer {
-    padding: 14px 16px 16px;
-  }
-
-  .hanging-rack-footer-right {
-    align-items: flex-start;
-    text-align: left;
+@media (max-width: 900px) {
+  .checkout-summary-col {
+    position: static;
   }
 
   .editorial-sheet-grid {
@@ -3472,10 +3493,274 @@
     gap: 20px;
   }
 
-  .editorial-sheet-card {
-    padding: 18px;
+  .editorial-visual-stage {
+    max-width: 340px;
+    margin: 0 auto;
+    width: 100%;
   }
 }
+
+@media (max-width: 768px) {
+  .browse-filter-group {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hanging-rack-shell {
+    border-radius: 20px;
+  }
+
+  .hanging-rack-stage {
+    height: 390px;
+  }
+
+  .hanging-garment-pendulum {
+    width: 200px;
+  }
+
+  .hanging-garment-figure {
+    height: 225px;
+  }
+
+  .hanging-rack-topbar {
+    padding: 14px 16px 8px;
+    gap: 10px;
+  }
+
+  .hanging-rack-subkicker,
+  .hanging-rack-divider {
+    display: none;
+  }
+
+  .hanging-rack-footer {
+    position: relative;
+    padding: 14px 16px 18px;
+    background: rgba(248, 250, 252, 0.96);
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .hanging-rack-footer-right,
+  [dir="rtl"] .hanging-rack-footer-right {
+    align-items: flex-start;
+    text-align: start;
+    width: 100%;
+  }
+
+  .hanging-rack-editorial-copy {
+    max-width: 100%;
+  }
+
+  .editorial-sheet-card {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .loyalty-rules-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .loyalty-page {
+    padding: 16px 8px 48px;
+    gap: 20px;
+  }
+
+  .loyalty-auth-card,
+  .loyalty-dashboard-card,
+  .loyalty-ledger-card,
+  .loyalty-faq-card {
+    padding: 20px 18px;
+  }
+
+  .receipt-page {
+    padding: 12px 4px 48px;
+  }
+
+  .receipt-paper {
+    padding: 24px 20px;
+    border-radius: 16px;
+  }
+
+  .checkout-page {
+    padding: 12px 4px 48px;
+  }
+
+  .checkout-card,
+  .checkout-summary-card,
+  .order-summary-card {
+    padding: 18px 16px;
+  }
+
+  .assistant-fab {
+    bottom: 16px;
+    right: 16px;
+    padding: 11px 16px;
+    font-size: 0.86rem;
+  }
+
+  [dir="rtl"] .assistant-fab {
+    left: 16px;
+    right: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .hanging-rack-stage {
+    height: 340px;
+  }
+
+  .hanging-garment-pendulum {
+    width: 170px;
+  }
+
+  .hanging-garment-figure {
+    height: 192px;
+  }
+
+  .hanging-rack-mode-btn {
+    display: none;
+  }
+
+  .hanging-price-pill {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    bottom: 10px;
+  }
+
+  .hanging-garment-quickbar {
+    bottom: 6px;
+    padding: 4px;
+    gap: 4px;
+  }
+
+  .hanging-quick-btn {
+    padding: 5px 10px;
+    font-size: 0.69rem;
+  }
+
+  .hanging-rack-footer-cta-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .editorial-modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .editorial-sheet-card {
+    max-height: 92dvh;
+    border-radius: 22px 22px 0 0;
+    padding: 16px 16px 24px;
+  }
+
+  .editorial-product-title {
+    font-size: 1.3rem;
+  }
+
+  .editorial-secondary-actions {
+    flex-direction: column;
+  }
+
+  .editorial-secondary-actions .btn {
+    width: 100%;
+  }
+
+  .assistant-drawer {
+    max-width: 100%;
+  }
+
+  .assistant-header {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .checkout-item-preview {
+    gap: 12px;
+  }
+
+  .checkout-item-thumb {
+    width: 82px;
+    height: 98px;
+  }
+
+  .loyalty-auth-form-row,
+  .loyalty-otp-input-row,
+  .loyalty-phone-row,
+  .loyalty-otp-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .loyalty-auth-form-row .btn,
+  .loyalty-otp-input-row .btn {
+    width: 100%;
+  }
+
+  .checkout-input.otp {
+    max-width: 100%;
+  }
+
+  .receipt-paper {
+    padding: 18px 14px;
+  }
+
+  .receipt-brand-name {
+    font-size: 1.25rem;
+  }
+
+  .receipt-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .receipt-action-buttons {
+    width: 100%;
+  }
+
+  .receipt-action-buttons .btn {
+    flex: 1;
+  }
+
+  .receipt-rewards-card {
+    flex-direction: column;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 400px) {
+  .cart-line-item-grid {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .hanging-rack-stage {
+    height: 315px;
+  }
+
+  .hanging-garment-pendulum {
+    width: 152px;
+  }
+
+  .hanging-garment-figure {
+    height: 174px;
+  }
+
+  .loyalty-main-title {
+    font-size: 1.45rem;
+  }
+
+  .metric-val {
+    font-size: 1.65rem;
+  }
+}
+
 
 
 

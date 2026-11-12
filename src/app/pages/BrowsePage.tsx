@@ -285,17 +285,9 @@ export function BrowsePage() {
   return (
     <div className="browse-page">
       {/* Page Intro + Category Filter Bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-          flexWrap: 'wrap',
-        }}
-      >
+      <div className="browse-header-row">
         <div>
-          <h1 style={{ fontSize: '1.45rem', fontWeight: 800 }}>
+          <h1 className="page-hero-title">
             {t('browseTitle')}
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
@@ -303,14 +295,7 @@ export function BrowsePage() {
           </p>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            flexWrap: 'wrap',
-          }}
-        >
+        <div className="browse-filter-group">
           <div className="category-pills" style={{ marginBottom: 0 }}>
             <button
               type="button"

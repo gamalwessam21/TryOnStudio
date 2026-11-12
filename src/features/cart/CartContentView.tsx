@@ -331,14 +331,7 @@ export function CartContentView({
                 gap: 10,
               }}
             >
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '76px 1fr',
-                  gap: 12,
-                  alignItems: 'start',
-                }}
-              >
+              <div className="cart-line-item-grid">
                 <div
                   style={{ cursor: 'pointer' }}
                   onClick={() => {

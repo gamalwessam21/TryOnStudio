@@ -93,18 +93,10 @@ export function SizeGuidePage() {
 
       {/* Product Picker Bar */}
       <section
-        className="card"
-        style={{
-          padding: '16px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-          flexWrap: 'wrap',
-        }}
+        className="card size-guide-picker-bar"
         aria-label={t('selectedOutfitTitle')}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div className="size-guide-picker-left">
           {selectedItemDetails && (
             <div style={{ width: 58, flexShrink: 0 }}>
               <GarmentImage
@@ -116,7 +108,7 @@ export function SizeGuidePage() {
               />
             </div>
           )}
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <label
               htmlFor="size-page-item-select"
               style={{
@@ -133,16 +125,7 @@ export function SizeGuidePage() {
               id="size-page-item-select"
               value={selectedItemId ?? ''}
               onChange={(e) => selectItem(Number(e.target.value))}
-              style={{
-                height: 40,
-                borderRadius: 10,
-                border: '1px solid var(--border-strong)',
-                padding: '0 12px',
-                background: 'var(--bg-surface)',
-                fontWeight: 600,
-                minWidth: 250,
-                maxWidth: '100%',
-              }}
+              className="size-guide-select"
             >
               {catalogList.map((it) => (
                 <option key={it.id} value={it.id}>
@@ -182,14 +165,7 @@ export function SizeGuidePage() {
       </section>
 
       {/* Main Size Scan Grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
-          gap: 18,
-          alignItems: 'stretch',
-        }}
-      >
+      <div className="size-guide-grid">
         {/* Dedicated Raw Camera Viewport */}
         <section
           className="mirror-card"

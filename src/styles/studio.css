@@ -692,6 +692,50 @@
   align-items: start;
 }
 
+.selected-outfit-actions-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Size Guide Page Responsive Layouts */
+.size-guide-picker-bar {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.size-guide-picker-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.size-guide-select {
+  width: 100%;
+  max-width: 340px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+}
+
+.size-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
 .sizes-pill-row {
   display: flex;
   align-items: center;
@@ -980,7 +1024,7 @@
   }
 
   .mirror-card {
-    min-height: 430px;
+    min-height: 420px;
   }
 
   .selector-panel {
@@ -988,19 +1032,67 @@
     max-height: none;
   }
 
+  .selector-scroll-area {
+    max-height: 410px;
+  }
+
   .studio-bottom-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
+@media (max-width: 640px) {
+  .gesture-bar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .gesture-bar-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .size-guide-picker-bar {
+    padding: 14px;
+  }
+
+  .size-guide-select {
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 560px) {
   .mirror-card {
-    min-height: 360px;
+    min-height: 350px;
     border-radius: var(--radius-lg);
   }
 
   .mirror-brackets {
-    inset: 52px 16px 68px;
+    inset: 52px 14px 68px;
+  }
+
+  .mirror-top-bar,
+  .mirror-bottom-bar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .mirror-idle-state {
+    padding: 18px 14px;
+    gap: 12px;
+  }
+
+  .mirror-idle-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .mirror-idle-title {
+    font-size: 1.05rem;
+  }
+
+  .mirror-idle-desc {
+    font-size: 0.82rem;
   }
 
   .selector-product-grid {
@@ -1022,6 +1114,16 @@
   }
 }
 
+@media (max-width: 420px) {
+  .selected-outfit-actions-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalog-full-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 360px) {
   .selector-product-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1033,7 +1135,7 @@
 
   .mirror-top-bar,
   .mirror-bottom-bar {
-    padding: 10px 12px;
+    padding: 8px 10px;
   }
 }
 

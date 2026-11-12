@@ -29,13 +29,7 @@ export function HowItWorksPage() {
         </p>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
-          gap: 16,
-        }}
-      >
+      <div className="how-it-works-grid">
         <section className="card bottom-card">
           <div className="bottom-card-title">
             <Camera size={20} color="var(--blue-600)" aria-hidden="true" />

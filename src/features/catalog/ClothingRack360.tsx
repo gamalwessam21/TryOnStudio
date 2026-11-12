@@ -87,6 +87,9 @@ export function ClothingRack360({
   const [mouseScrubRatio, setMouseScrubRatio] = useState<number | null>(null);
   const [mouseFollowEnabled, setMouseFollowEnabled] = useState<boolean>(true);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [stageWidth, setStageWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1024
+  );
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const targetOffsetRef = useRef<number>(0);
@@ -96,12 +99,32 @@ export function ClothingRack360({
   const pointerStartXRef = useRef<number>(0);
   const pointerStartOffsetRef = useRef<number>(0);
   const pointerMovedRef = useRef<boolean>(false);
+  const lastPointerTypeRef = useRef<string>('mouse');
   const preloadedRef = useRef<Set<string>>(new Set());
   const turnedIdxRef = useRef<number | null>(null);
 
   useEffect(() => {
     turnedIdxRef.current = turnedIdx;
   }, [turnedIdx]);
+
+  // Measure stage width so garment spacing adapts cleanly across desktop, tablet, and mobile
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const updateWidth = () => {
+      if (el.clientWidth > 0) {
+        setStageWidth(el.clientWidth);
+      }
+    };
+    updateWidth();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(updateWidth);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [loading, rackItems.length]);
 
   // Preload 360° frames in background so frame scrubbing & turning is instant
   const preloadAllFrames = useCallback(() => {
@@ -207,7 +230,13 @@ export function ClothingRack360({
   // Move mouse across stage -> glides the rack and scrubs 360 frames smoothly
   function handleStageMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     preloadAllFrames();
-    if (isPointerDownRef.current || rackItems.length === 0) return;
+    if (
+      isPointerDownRef.current ||
+      lastPointerTypeRef.current === 'touch' ||
+      rackItems.length === 0
+    ) {
+      return;
+    }
 
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return;
@@ -230,6 +259,7 @@ export function ClothingRack360({
   }
 
   function handleStageMouseLeave() {
+    if (lastPointerTypeRef.current === 'touch') return;
     setMouseScrubRatio(null);
     const snapped = Math.max(
       0,
@@ -241,6 +271,7 @@ export function ClothingRack360({
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     preloadAllFrames();
+    lastPointerTypeRef.current = e.pointerType || 'mouse';
     isPointerDownRef.current = true;
     pointerMovedRef.current = false;
     pointerStartXRef.current = e.clientX;
@@ -249,12 +280,13 @@ export function ClothingRack360({
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!isPointerDownRef.current || rackItems.length <= 1) return;
+    lastPointerTypeRef.current = e.pointerType || lastPointerTypeRef.current;
     const deltaX = e.clientX - pointerStartXRef.current;
     if (Math.abs(deltaX) > 6) {
       pointerMovedRef.current = true;
     }
-    const stageWidth = stageRef.current?.clientWidth || 900;
-    const slotPx = Math.max(130, stageWidth * 0.2);
+    const currentWidth = stageRef.current?.clientWidth || stageWidth || 900;
+    const slotPx = Math.max(95, currentWidth * 0.22);
     const nextTarget = clampOffset(
       pointerStartOffsetRef.current - deltaX / slotPx
     );
@@ -479,7 +511,14 @@ export function ClothingRack360({
                 const validId = Number.isInteger(numericId) && numericId > 0;
 
                 const rel = idx - renderOffset;
-                const slotSpacing = rackItems.length <= 4 ? 0.21 : 0.165;
+                const slotSpacing =
+                  stageWidth < 520
+                    ? 0.42
+                    : stageWidth < 860
+                    ? 0.25
+                    : rackItems.length <= 4
+                    ? 0.21
+                    : 0.165;
                 const u = 0.5 + rel * slotSpacing;
 
                 // Skip rendering items far off-screen for smooth 60fps performance
@@ -703,9 +742,10 @@ export function ClothingRack360({
                 );
               })}
             </div>
+          </div>
 
-            {/* Bottom Stage HUD Overlay */}
-            <div className="hanging-rack-footer">
+          {/* Bottom Stage HUD Overlay (absolute on desktop, stacked below stage on tablet/mobile) */}
+          <div className="hanging-rack-footer">
               <div className="hanging-rack-footer-left">
                 {activePiece && (
                   <div className="hanging-rack-active-meta">
@@ -868,7 +908,6 @@ export function ClothingRack360({
                 </div>
               </div>
             </div>
-          </div>
         </>
       )}
     </section>

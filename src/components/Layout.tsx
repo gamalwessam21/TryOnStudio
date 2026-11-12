@@ -46,6 +46,16 @@ export function Layout() {
     setMobileNavOpen(false);
   }, [location.pathname]);
 
+  // Lock body scroll while mobile navigation drawer is open
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileNavOpen]);
+
   // Allow Escape key to close mobile drawer
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -96,12 +106,20 @@ export function Layout() {
                 />
               </svg>
             </div>
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="sidebar-brand-title">{t('brandTitle')}</div>
               <div className="sidebar-brand-subtitle">
                 {t('brandSubtitle')}
               </div>
             </div>
+            <button
+              type="button"
+              className="sidebar-close-btn"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close navigation menu"
+            >
+              <X size={18} />
+            </button>
           </div>
 
           <nav className="sidebar-nav">
@@ -264,14 +282,14 @@ export function Layout() {
           <div className="header-right">
             <button
               type="button"
-              className="lang-switcher-btn"
+              className="lang-switcher-btn header-cart-btn"
               onClick={() => setCartDrawerOpen(true)}
               aria-label={`${t('navCart')} (${cartTotalQuantity})`}
               title={t('navCart')}
               style={{ position: 'relative' }}
             >
               <ShoppingCart size={15} aria-hidden="true" />
-              <span>{t('navCart')}</span>
+              <span className="header-btn-label">{t('navCart')}</span>
               {cartTotalQuantity > 0 && (
                 <span
                   className="nav-badge"
