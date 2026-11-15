@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
-  ArrowRight,
   ArrowLeft,
+  ArrowRight,
   Check,
+  ChevronDown,
   Clock,
-  Coins,
-  HelpCircle,
   History,
   KeyRound,
   Loader2,
@@ -28,11 +27,63 @@ import {
   maskPhoneNumber,
   validatePhoneNumber,
 } from '../../utils/commerceHelpers';
+import '../../styles/loyalty.css';
+
+const OTP_LENGTH = 6;
 
 function formatCountdown(totalSec: number): string {
   const mins = Math.floor(totalSec / 60);
   const secs = totalSec % 60;
   return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+/**
+ * One real <input> (so autofill, paste and screen readers just work)
+ * with six display cells drawn on top of it.
+ */
+interface OtpBoxesProps {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  disabled?: boolean;
+}
+
+function OtpBoxes({ value, onChange, label, disabled }: OtpBoxesProps) {
+  const [focused, setFocused] = useState(false);
+  const activeIndex = Math.min(value.length, OTP_LENGTH - 1);
+
+  return (
+    <div
+      className={`ly-otp ${focused ? 'is-focused' : ''} ${disabled ? 'is-disabled' : ''}`}
+    >
+      <input
+        className="ly-otp-input"
+        type="text"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        pattern="[0-9]*"
+        maxLength={OTP_LENGTH}
+        value={value}
+        onChange={(e) =>
+          onChange(e.target.value.replace(/\D/g, '').slice(0, OTP_LENGTH))
+        }
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        disabled={disabled}
+        aria-label={label}
+        autoFocus
+      />
+      {Array.from({ length: OTP_LENGTH }, (_, i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          className={`ly-otp-cell ${i === activeIndex ? 'is-active' : ''}`}
+        >
+          {value[i] ?? ''}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export function LoyaltyPage() {
@@ -53,6 +104,7 @@ export function LoyaltyPage() {
   } = useCommerce();
 
   const navigate = useNavigate();
+  const tr = (en: string, ar: string) => (language === 'ar' ? ar : en);
 
   const [phoneInput, setPhoneInput] = useState('');
   const [codeInput, setCodeInput] = useState('');
@@ -112,6 +164,7 @@ export function LoyaltyPage() {
     const res = await requestCustomerVerification(phoneInput.trim());
     if (res.challengeSent) {
       setCodeSent(true);
+      setCodeInput('');
       setChallengeMessage(res.message || null);
       if (typeof res.expiresInSeconds === 'number' && res.expiresInSeconds > 0) {
         setOtpRemainingSec(res.expiresInSeconds);
@@ -120,8 +173,8 @@ export function LoyaltyPage() {
   };
 
   const handleConfirmCode = async () => {
-    if (!codeInput.trim()) return;
-    const ok = await confirmCustomerVerification(phoneInput.trim(), codeInput.trim());
+    if (codeInput.length !== OTP_LENGTH) return;
+    const ok = await confirmCustomerVerification(phoneInput.trim(), codeInput);
     if (ok) {
       setCodeSent(false);
       setCodeInput('');
@@ -129,602 +182,526 @@ export function LoyaltyPage() {
     }
   };
 
+  const rules = loyaltyRules;
+  const isVerified = Boolean(loyaltyVerificationToken && loyaltyAccount);
+  const otpExpired = otpRemainingSec === 0;
+  const maxPercent = Math.round((rules.maxRedemptionRatio ?? 1) * 100);
+
+  // Display-only progress toward the next redemption block.
+  // The balance itself always comes from the backend.
+  const balance = loyaltyAccount?.currentBalance ?? 0;
+  const block = rules.redemptionBlockPoints;
+  const remainder = block > 0 ? balance % block : 0;
+  const pointsToNext = block > 0 ? block - remainder : 0;
+  const progressPct = block > 0 ? (remainder / block) * 100 : 0;
+  const pointsToFirst = Math.max(rules.minRedemptionPoints - balance, 0);
+
+  const txLabel = (type: string) =>
+    type === 'earn'
+      ? t('earnedPointsBadge')
+      : type === 'redeem'
+      ? t('redeemedPointsBadge')
+      : type === 'reversal'
+      ? tr('Reversed', 'مسترجعة')
+      : t('adjustedPointsBadge');
+
+  const faqs = [
+    {
+      q: tr(
+        'When are earned points added to my balance?',
+        'متى تُضاف النقاط المكتسبة إلى رصيدي؟'
+      ),
+      a: tr(
+        'For Cash on Delivery (COD) orders, points are awarded immediately upon order creation. For Stripe card orders, points are awarded once payment verification succeeds.',
+        'في طلبات الدفع عند الاستلام (COD) تُضاف النقاط فوراً بمجرد إنشاء الطلب، وفي طلبات الدفع بالبطاقة عبر Stripe تُضاف النقاط فور التحقق من إتمام الدفع بنجاح.'
+      ),
+    },
+    {
+      q: tr(
+        'Can I use points with any payment method?',
+        'هل يمكنني استبدال النقاط مع أي وسيلة دفع؟'
+      ),
+      a: tr(
+        'Yes! Points discounts can be applied at checkout for both Cash on Delivery and Stripe Hosted card payment.',
+        'نعم! يمكنك تطبيق خصم النقاط على مشترياتك سواء اخترت الدفع عند الاستلام (COD) أو الدفع الإلكتروني عبر Stripe.'
+      ),
+    },
+    {
+      q: tr(
+        'What happens to redeemed points if an order is cancelled?',
+        'ماذا يحدث للنقاط المستبدلة إذا تم إلغاء الطلب؟'
+      ),
+      a: tr(
+        'Any points redeemed on an order that is subsequently cancelled are returned to your account balance.',
+        'وفقاً لسياسة النظام، يتم استرداد أي نقاط تم استبدالها تلقائياً إلى رصيدك إذا أُلغي الطلب قبل الشحن.'
+      ),
+    },
+  ];
+
   return (
-    <div className="loyalty-page">
-      {/* Page Header with 3D Gift Emblem */}
-      <div className="loyalty-header-block">
-        <div className="loyalty-header-icon-3d" aria-hidden="true">
-          <svg width="44" height="44" viewBox="0 0 64 64" fill="none">
-            <defs>
-              <linearGradient id="giftBoxTop" x1="8" y1="18" x2="56" y2="34" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#a78bfa" />
-                <stop offset="50%" stopColor="#7c3aed" />
-                <stop offset="100%" stopColor="#4c1d95" />
-              </linearGradient>
-              <linearGradient id="giftBoxBody" x1="12" y1="30" x2="52" y2="58" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#8b5cf6" />
-                <stop offset="100%" stopColor="#3b0764" />
-              </linearGradient>
-              <linearGradient id="giftRibbonGold" x1="20" y1="8" x2="44" y2="58" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#fde68a" />
-                <stop offset="45%" stopColor="#f59e0b" />
-                <stop offset="100%" stopColor="#b45309" />
-              </linearGradient>
-            </defs>
-            <ellipse cx="32" cy="58" rx="20" ry="4" fill="rgba(76, 29, 149, 0.22)" />
-            <rect x="12" y="30" width="40" height="25" rx="6" fill="url(#giftBoxBody)" />
-            <rect x="9" y="21" width="46" height="11" rx="4" fill="url(#giftBoxTop)" />
-            <rect x="28" y="21" width="8" height="34" fill="url(#giftRibbonGold)" />
-            <rect x="12" y="38" width="40" height="6" fill="url(#giftRibbonGold)" opacity="0.9" />
-            <path
-              d="M32 21C25 21 19 16.5 21 11.5C23 7 30 11 32 21Z"
-              fill="url(#giftRibbonGold)"
-            />
-            <path
-              d="M32 21C39 21 45 16.5 43 11.5C41 7 34 11 32 21Z"
-              fill="url(#giftRibbonGold)"
-            />
-            <circle cx="48" cy="14" r="2.5" fill="#fde047" />
-            <circle cx="16" cy="16" r="1.8" fill="#c4b5fd" />
-          </svg>
-        </div>
-        <div className="loyalty-header-text">
-          <div className="loyalty-header-eyebrow">
-            <Sparkles size={13} />
-            <span>{language === 'ar' ? 'مكافآت حصرية للعملاء' : 'TRYONSTUDIO REWARDS CLUB'}</span>
-          </div>
-          <h1 className="loyalty-main-title">{t('loyaltyTitle')}</h1>
-          <p className="loyalty-main-subtitle">{t('loyaltySubtitle')}</p>
-        </div>
-      </div>
+    <div className="ly">
+      <div className="ly-hero">
+        {/* ---- Title ---- */}
+        <header className="ly-intro">
+          <h1 className="ly-title">{t('loyaltyTitle')}</h1>
+          <p className="ly-lead">{t('loyaltySubtitle')}</p>
+        </header>
 
-      {loyaltyError && (
-        <div className="banner banner-error" role="alert">
-          <AlertCircle size={17} style={{ flexShrink: 0 }} />
-          <span>{loyaltyError}</span>
-        </div>
-      )}
-
-      {/* Program Explainer Cards (3 Core Pillars with 3D Isometric Icons & Layered Cards) */}
-      <section className="loyalty-rules-grid" aria-label="Program Rules">
-        {/* Card 1: Earn on Purchases */}
-        <article className="card loyalty-rule-card earn-theme">
-          <div className="rule-card-glow" aria-hidden="true" />
-          <div className="rule-card-top">
-            <div className="rule-card-icon-3d earn" aria-hidden="true">
-              <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
-                <defs>
-                  <linearGradient id="coinRim" x1="10" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#fef08a" />
-                    <stop offset="45%" stopColor="#f59e0b" />
-                    <stop offset="100%" stopColor="#b45309" />
-                  </linearGradient>
-                  <linearGradient id="coinFace" x1="16" y1="16" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#fde047" />
-                    <stop offset="100%" stopColor="#d97706" />
-                  </linearGradient>
-                  <linearGradient id="coinBack" x1="24" y1="8" x2="58" y2="42" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#60a5fa" />
-                    <stop offset="100%" stopColor="#1d4ed8" />
-                  </linearGradient>
-                </defs>
-                <ellipse cx="32" cy="57" rx="18" ry="3.5" fill="rgba(217, 119, 6, 0.25)" />
-                {/* Secondary 3D Blue Token behind */}
-                <circle cx="40" cy="24" r="14" fill="url(#coinBack)" />
-                <circle cx="40" cy="24" r="10.5" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" />
-                {/* Foreground 3D Gold Medallion */}
-                <ellipse cx="27" cy="37" rx="18" ry="18" fill="#92400e" />
-                <circle cx="27" cy="34" r="18" fill="url(#coinRim)" />
-                <circle cx="27" cy="34" r="13.5" fill="url(#coinFace)" />
-                <path
-                  d="M27 25L29.4 30.2L35 30.9L30.8 34.7L31.9 40.3L27 37.5L22.1 40.3L23.2 34.7L19 30.9L24.6 30.2L27 25Z"
-                  fill="#fef9c3"
-                />
-              </svg>
-            </div>
-            <span className="rule-step-pill earn">01</span>
-          </div>
-
-          <h3 className="rule-card-title">
-            {language === 'ar' ? '1. اكسب مع كل طلب' : '1. Earn on Purchases'}
-          </h3>
-          <p className="rule-card-desc">
-            {language === 'ar'
-              ? `اكسب ${loyaltyRules.pointsEarnedPerUnit} نقطة مقابل كل ${loyaltyRules.earnUnitAmountEgp} جنيه مصري يتم إنفاقها على المشتريات المؤكدة بعد الخصومات.`
-              : `Earn ${loyaltyRules.pointsEarnedPerUnit} point for every ${loyaltyRules.earnUnitAmountEgp} EGP spent on confirmed, completed merchandise after discounts.`}
-          </p>
-          <div className="rule-card-footer">
-            <span className="rule-rate-tag earn">
-              <Coins size={14} aria-hidden="true" />
-              <bdi dir="ltr">
-                {loyaltyRules.pointsEarnedPerUnit} pt / {loyaltyRules.earnUnitAmountEgp} EGP
-              </bdi>
-            </span>
-          </div>
-        </article>
-
-        {/* Card 2: Redeem for Discounts */}
-        <article className="card loyalty-rule-card redeem-theme">
-          <div className="rule-card-glow" aria-hidden="true" />
-          <div className="rule-card-top">
-            <div className="rule-card-icon-3d redeem" aria-hidden="true">
-              <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
-                <defs>
-                  <linearGradient id="gemFacetMain" x1="12" y1="12" x2="52" y2="54" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#c4b5fd" />
-                    <stop offset="45%" stopColor="#8b5cf6" />
-                    <stop offset="100%" stopColor="#4c1d95" />
-                  </linearGradient>
-                  <linearGradient id="gemFacetTop" x1="16" y1="12" x2="48" y2="28" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#f5f3ff" />
-                    <stop offset="100%" stopColor="#a78bfa" />
-                  </linearGradient>
-                  <linearGradient id="sparkleGold" x1="40" y1="8" x2="56" y2="24" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#fef08a" />
-                    <stop offset="100%" stopColor="#f59e0b" />
-                  </linearGradient>
-                </defs>
-                <ellipse cx="32" cy="57" rx="18" ry="3.5" fill="rgba(124, 58, 237, 0.24)" />
-                {/* 3D Diamond / Discount Gem */}
-                <polygon points="20,16 44,16 54,28 32,52 10,28" fill="url(#gemFacetMain)" />
-                <polygon points="20,16 44,16 48,28 16,28" fill="url(#gemFacetTop)" />
-                <polygon points="16,28 48,28 32,52" fill="rgba(255,255,255,0.18)" />
-                <polyline
-                  points="10,28 54,28"
-                  stroke="rgba(255,255,255,0.55)"
-                  strokeWidth="1.5"
-                />
-                {/* 3D Floating Star Sparkle */}
-                <path
-                  d="M49 8L51.2 13.8L57 16L51.2 18.2L49 24L46.8 18.2L41 16L46.8 13.8L49 8Z"
-                  fill="url(#sparkleGold)"
-                />
-              </svg>
-            </div>
-            <span className="rule-step-pill redeem">02</span>
-          </div>
-
-          <h3 className="rule-card-title">
-            {language === 'ar' ? '2. استبدل بخصومات فورية' : '2. Redeem for Discounts'}
-          </h3>
-          <p className="rule-card-desc">
-            {language === 'ar'
-              ? `استبدل نقاطك بسهولة في صفحة الدفع: كل ${loyaltyRules.redemptionBlockPoints} نقطة تمنحك خصماً فورياً بقيمة ${loyaltyRules.redemptionBlockValueEgp} جنيه.`
-              : `Redeem your points seamlessly at checkout: every ${loyaltyRules.redemptionBlockPoints} points provides ${loyaltyRules.redemptionBlockValueEgp} EGP instant discount.`}
-          </p>
-          <div className="rule-card-footer">
-            <span className="rule-rate-tag redeem">
-              <Sparkles size={14} aria-hidden="true" />
-              <bdi dir="ltr">
-                {loyaltyRules.redemptionBlockPoints} pts = {loyaltyRules.redemptionBlockValueEgp} EGP
-              </bdi>
-            </span>
-          </div>
-        </article>
-
-        {/* Card 3: Verified & Authoritative */}
-        <article className="card loyalty-rule-card secure-theme">
-          <div className="rule-card-glow" aria-hidden="true" />
-          <div className="rule-card-top">
-            <div className="rule-card-icon-3d secure" aria-hidden="true">
-              <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
-                <defs>
-                  <linearGradient id="shieldOuter" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#6ee7b7" />
-                    <stop offset="50%" stopColor="#10b981" />
-                    <stop offset="100%" stopColor="#065f46" />
-                  </linearGradient>
-                  <linearGradient id="shieldInner" x1="18" y1="14" x2="46" y2="48" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#34d399" />
-                    <stop offset="100%" stopColor="#047857" />
-                  </linearGradient>
-                </defs>
-                <ellipse cx="32" cy="57" rx="17" ry="3.5" fill="rgba(16, 185, 129, 0.24)" />
-                <path
-                  d="M32 8L52 15.5V30.5C52 43.2 43.4 51.8 32 55C20.6 51.8 12 43.2 12 30.5V15.5L32 8Z"
-                  fill="url(#shieldOuter)"
-                />
-                <path
-                  d="M32 13L47 18.6V30.2C47 40.1 40.4 47.1 32 49.8C23.6 47.1 17 40.1 17 30.2V18.6L32 13Z"
-                  fill="url(#shieldInner)"
-                  stroke="rgba(255,255,255,0.4)"
-                  strokeWidth="1.2"
-                />
-                <path
-                  d="M24.5 31.5L29.5 36.5L40 26"
-                  stroke="#ecfdf5"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <span className="rule-step-pill secure">03</span>
-          </div>
-
-          <h3 className="rule-card-title">
-            {language === 'ar' ? '3. حماية وأمان كامل' : '3. Verified & Authoritative'}
-          </h3>
-          <p className="rule-card-desc">
-            {language === 'ar'
-              ? 'الرصيد محمي بالتحقق؛ لا يمكن لأي شخص استبدال نقاطك بدون رمز تأكيد، وتتم مراجعة العمليات عبر سجل المعاملات.'
-              : 'Points balances are authoritatively verified. A phone number alone cannot spend points without proof of ownership.'}
-          </p>
-          <div className="rule-card-footer">
-            <span className="rule-rate-tag secure">
-              <ShieldCheck size={14} aria-hidden="true" />
-              <span>{language === 'ar' ? 'سجل معاملات موثق' : 'Ledger Protected'}</span>
-            </span>
-          </div>
-        </article>
-      </section>
-
-      {/* Main Account Status or Verification Login */}
-      {!loyaltyVerificationToken || !loyaltyAccount ? (
-        <section className="card loyalty-auth-card" aria-label="Verify Phone Number">
-          <div className="loyalty-auth-header">
-            <Lock size={22} color="var(--purple-600)" />
-            <h2>
-              {language === 'ar'
-                ? 'الوصول إلى رصيد وسجل نقاطك'
-                : 'Access Your Points Balance & History'}
-            </h2>
-          </div>
-
-          <p className="loyalty-auth-desc">
-            {language === 'ar'
-              ? 'أدخل رقم هاتفك المحمول لعرض رصيدك المتاح، إجمالي الخصم المستحق، وسجل المعاملات السابقة.'
-              : 'Enter your mobile phone number to view your verified points balance, available discount value, and full transaction history.'}
-          </p>
-
-          {!codeSent ? (
-            <div className="loyalty-auth-form-row">
-              <div style={{ flex: 1 }}>
-                <input
-                  type="tel"
-                  className={`checkout-input ${phoneError ? 'has-error' : ''}`}
-                  placeholder={language === 'ar' ? 'رقم الموبايل (مثال: 01012345678)' : 'Mobile Phone (e.g. 01012345678)'}
-                  value={phoneInput}
-                  onChange={(e) => {
-                    setPhoneInput(e.target.value);
-                    if (phoneError) setPhoneError(null);
-                  }}
-                  dir="ltr"
-                  disabled={loyaltyLoading}
-                />
-                {phoneError && <p className="checkout-field-error">{phoneError}</p>}
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-purple"
-                onClick={() => void handleRequestCode()}
-                disabled={loyaltyLoading || !phoneInput.trim()}
-              >
-                {loyaltyLoading ? (
-                  <Loader2 size={16} className="spin" />
-                ) : (
-                  <KeyRound size={16} />
-                )}
-                <span>
-                  {language === 'ar' ? 'إرسال رمز التحقق' : 'Send Verification Code'}
+        {/* ---- Rewards card: verify, or show balance ---- */}
+        <section className="ly-card" aria-labelledby="ly-card-title">
+          {!isVerified && !codeSent && (
+            <>
+              <div className="ly-card-top">
+                <span className="ly-brand">
+                  <Sparkles size={16} aria-hidden="true" />
+                  {tr('TryOnStudio rewards', 'مكافآت TryOnStudio')}
                 </span>
-              </button>
-            </div>
-          ) : (
-            <div className="loyalty-auth-code-box">
-              <div
-                className="banner banner-info"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                  flexWrap: 'wrap',
+                <Lock size={18} aria-hidden="true" />
+              </div>
+              <h2 id="ly-card-title" className="ly-card-title">
+                {tr('Check your points', 'تحقق من نقاطك')}
+              </h2>
+              <p className="ly-card-desc">
+                {tr(
+                  'Enter your mobile number to get a verification code. Your balance and history open once the code is confirmed.',
+                  'أدخل رقم هاتفك المحمول للحصول على رمز التحقق. يظهر رصيدك وسجلك بعد تأكيد الرمز.'
+                )}
+              </p>
+
+              <form
+                className="ly-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleRequestCode();
+                }}
+                noValidate
+              >
+                <div>
+                  <label className="ly-label" htmlFor="ly-phone">
+                    {tr('Mobile number', 'رقم الموبايل')}
+                  </label>
+                  <input
+                    id="ly-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    className={`ly-input ${phoneError ? 'has-error' : ''}`}
+                    placeholder="01012345678"
+                    value={phoneInput}
+                    onChange={(e) => {
+                      setPhoneInput(e.target.value);
+                      if (phoneError) setPhoneError(null);
+                    }}
+                    dir="ltr"
+                    disabled={loyaltyLoading}
+                    aria-invalid={phoneError ? true : undefined}
+                    aria-describedby={phoneError ? 'ly-phone-error' : undefined}
+                  />
+                  {phoneError && (
+                    <p id="ly-phone-error" className="ly-field-error" role="alert">
+                      {phoneError}
+                    </p>
+                  )}
+                </div>
+
+                {loyaltyError && (
+                  <p className="ly-error" role="alert">
+                    <AlertCircle size={16} aria-hidden="true" />
+                    <span>{loyaltyError}</span>
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  className="ly-btn ly-btn--light ly-btn--block"
+                  disabled={loyaltyLoading || !phoneInput.trim()}
+                >
+                  {loyaltyLoading ? (
+                    <Loader2 size={16} className="spin" aria-hidden="true" />
+                  ) : (
+                    <KeyRound size={16} aria-hidden="true" />
+                  )}
+                  <span>{tr('Send code', 'إرسال الرمز')}</span>
+                </button>
+              </form>
+            </>
+          )}
+
+          {!isVerified && codeSent && (
+            <>
+              <div className="ly-card-top">
+                <span className="ly-brand">
+                  <Sparkles size={16} aria-hidden="true" />
+                  {tr('TryOnStudio rewards', 'مكافآت TryOnStudio')}
+                </span>
+                <Lock size={18} aria-hidden="true" />
+              </div>
+              <h2 id="ly-card-title" className="ly-card-title">
+                {tr('Enter your code', 'أدخل رمز التحقق')}
+              </h2>
+              <p className="ly-card-desc">
+                {tr('Verification code for ', 'رمز التحقق للرقم ')}
+                <bdi className="ly-phone">{phoneInput.trim()}</bdi>
+              </p>
+
+              <form
+                className="ly-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleConfirmCode();
                 }}
               >
-                <span>
-                  {challengeMessage ||
-                    (language === 'ar'
-                      ? `تم إرسال رمز التحقق إلى الرقم ${phoneInput}. أدخل الرمز للمتابعة.`
-                      : `Verification code sent to ${phoneInput}. Enter the code below to proceed.`)}
-                </span>
+                <OtpBoxes
+                  value={codeInput}
+                  onChange={setCodeInput}
+                  label={tr('6-digit verification code', 'رمز التحقق المكوّن من 6 أرقام')}
+                  disabled={loyaltyLoading || otpExpired}
+                />
+
                 {otpRemainingSec !== null && (
                   <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      color:
-                        otpRemainingSec > 0
-                          ? 'var(--blue-700, #1d4ed8)'
-                          : 'var(--red-600, #dc2626)',
-                    }}
+                    className={`ly-timer ${otpExpired ? 'is-expired' : ''}`}
+                    role="status"
                   >
-                    <Clock size={13} />
-                    <span>
-                      {otpRemainingSec > 0
-                        ? language === 'ar'
-                          ? `صلاحية الرمز: ${formatCountdown(otpRemainingSec)}`
-                          : `Code expires in ${formatCountdown(otpRemainingSec)}`
-                        : language === 'ar'
-                        ? 'انتهت صلاحية الرمز — اطلب رمزاً جديداً'
-                        : 'Code expired — request a new code'}
-                    </span>
+                    <Clock size={14} aria-hidden="true" />
+                    {otpExpired
+                      ? tr(
+                          'Code expired. Request a new one.',
+                          'انتهت صلاحية الرمز. اطلب رمزاً جديداً.'
+                        )
+                      : tr(
+                          `Code expires in ${formatCountdown(otpRemainingSec)}`,
+                          `صلاحية الرمز: ${formatCountdown(otpRemainingSec)}`
+                        )}
                   </span>
                 )}
-              </div>
 
-              <div className="loyalty-auth-form-row" style={{ marginTop: 12 }}>
-                <input
-                  type="text"
-                  className="checkout-input otp"
-                  placeholder={language === 'ar' ? 'رمز التأكيد' : '6-digit code'}
-                  value={codeInput}
-                  onChange={(e) => setCodeInput(e.target.value)}
-                  maxLength={12}
-                  disabled={loyaltyLoading || otpRemainingSec === 0}
-                  autoFocus
-                />
+                {challengeMessage && <p className="ly-hint">{challengeMessage}</p>}
+
+                {loyaltyError && (
+                  <p className="ly-error" role="alert">
+                    <AlertCircle size={16} aria-hidden="true" />
+                    <span>{loyaltyError}</span>
+                  </p>
+                )}
+
                 <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void handleConfirmCode()}
+                  type="submit"
+                  className="ly-btn ly-btn--light ly-btn--block"
                   disabled={
-                    loyaltyLoading ||
-                    !codeInput.trim() ||
-                    otpRemainingSec === 0
+                    loyaltyLoading || codeInput.length !== OTP_LENGTH || otpExpired
                   }
                 >
-                  {loyaltyLoading ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
-                  <span>{language === 'ar' ? 'تأكيد الرمز' : 'Verify & Open'}</span>
+                  {loyaltyLoading ? (
+                    <Loader2 size={16} className="spin" aria-hidden="true" />
+                  ) : (
+                    <Check size={16} aria-hidden="true" />
+                  )}
+                  <span>{tr('Verify and open', 'تأكيد وفتح الحساب')}</span>
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => void handleRequestCode()}
-                  disabled={loyaltyLoading || (retryWaitSec !== null && retryWaitSec > 0)}
-                >
-                  <RefreshCw size={13} />
-                  <span>
+
+                <div className="ly-link-row">
+                  <button
+                    type="button"
+                    className="ly-link"
+                    onClick={() => void handleRequestCode()}
+                    disabled={
+                      loyaltyLoading || (retryWaitSec !== null && retryWaitSec > 0)
+                    }
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
                     {retryWaitSec && retryWaitSec > 0
-                      ? language === 'ar'
-                        ? `انتظر (${retryWaitSec} ث)`
-                        : `Wait (${retryWaitSec}s)`
-                      : language === 'ar'
-                      ? 'طلب رمز جديد'
-                      : 'Request New Code'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    setCodeSent(false);
-                    setOtpRemainingSec(null);
-                  }}
-                  disabled={loyaltyLoading}
-                >
-                  <span>{language === 'ar' ? 'تغيير الرقم' : 'Change Phone'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Transparent Backend Contract Notice */}
-          {loyaltyBackendAvailable === false && (
-            <div className="loyalty-dev-notice">
-              <ShieldAlert size={16} color="var(--amber-700)" />
-              <div>
-                <strong>{language === 'ar' ? 'ملاحظة للمطورين:' : 'Backend Contract Notice:'}</strong>{' '}
-                {language === 'ar'
-                  ? 'نقاط النهاية /api/loyalty/* غير متوفرة بعد على سيرفر clothesai3d.runasp.net (ترجع 404). البرنامج مصمم بالكامل وجاهز للربط الفوري بمجرد رفع متحكم LoyaltyController على الباك إند.'
-                  : 'The /api/loyalty/* endpoints are not yet mounted on clothesai3d.runasp.net (returns 404). The frontend is fully integrated and ready to bind directly once LoyaltyController is deployed.'}
-              </div>
-            </div>
-          )}
-        </section>
-      ) : (
-        /* Verified Account Dashboard */
-        <section className="loyalty-dashboard-stack" aria-label="Loyalty Dashboard">
-          <div className="card loyalty-dashboard-card">
-            <div className="dashboard-top-row">
-              <div>
-                <span className="dashboard-account-tag">
-                  {language === 'ar' ? 'حساب ولاء موثّق' : 'Verified Loyalty Member'}
-                </span>
-                <div className="dashboard-phone" dir="ltr">
-                  {maskPhoneNumber(loyaltyAccount.customerPhoneMasked)}
+                      ? tr(`Wait ${retryWaitSec}s`, `انتظر ${retryWaitSec} ث`)
+                      : tr('Send a new code', 'إرسال رمز جديد')}
+                  </button>
+                  <button
+                    type="button"
+                    className="ly-link"
+                    onClick={() => {
+                      setCodeSent(false);
+                      setCodeInput('');
+                      setOtpRemainingSec(null);
+                    }}
+                    disabled={loyaltyLoading}
+                  >
+                    {tr('Use a different number', 'تغيير الرقم')}
+                  </button>
                 </div>
+              </form>
+            </>
+          )}
+
+          {isVerified && loyaltyAccount && (
+            <>
+              <div className="ly-card-top">
+                <span className="ly-member">
+                  <ShieldCheck size={14} aria-hidden="true" />
+                  {tr('Verified member', 'عضو موثّق')}
+                </span>
+                <bdi className="ly-brand ly-phone">
+                  {maskPhoneNumber(loyaltyAccount.customerPhoneMasked)}
+                </bdi>
               </div>
 
-              <div className="dashboard-actions-group">
+              <h2 id="ly-card-title" className="ly-balance-label">
+                {tr('Available balance', 'الرصيد المتاح')}
+              </h2>
+              <div className="ly-balance">
+                <span className="ly-balance-num">{loyaltyAccount.currentBalance}</span>
+                <span className="ly-balance-unit">{tr('points', 'نقطة')}</span>
+              </div>
+              <p className="ly-balance-value">
+                {tr(
+                  `Worth ${formatEgp(loyaltyAccount.availableDiscountEgp, language)} off at checkout`,
+                  `تساوي خصم ${formatEgp(loyaltyAccount.availableDiscountEgp, language)} عند الدفع`
+                )}
+              </p>
+
+              {block > 0 && (
+                <>
+                  <div
+                    className="ly-progress"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={block}
+                    aria-valuenow={remainder}
+                    aria-label={tr('Progress to next discount', 'التقدم نحو الخصم التالي')}
+                  >
+                    <div className="ly-progress-fill" style={{ width: `${progressPct}%` }} />
+                  </div>
+                  <p className="ly-progress-note">
+                    {pointsToFirst > 0
+                      ? tr(
+                          `Earn ${pointsToFirst} more points to unlock your first discount.`,
+                          `اكسب ${pointsToFirst} نقطة إضافية لفتح أول خصم لك.`
+                        )
+                      : tr(
+                          `${pointsToNext} more points for the next EGP ${rules.redemptionBlockValueEgp} off.`,
+                          `باقي ${pointsToNext} نقطة للخصم التالي بقيمة ${rules.redemptionBlockValueEgp} جنيه.`
+                        )}
+                  </p>
+                </>
+              )}
+
+              <dl className="ly-stats">
+                <div className="ly-stat">
+                  <dt>{tr('Earned so far', 'إجمالي المكتسب')}</dt>
+                  <dd>{loyaltyAccount.lifetimeEarned}</dd>
+                </div>
+                <div className="ly-stat">
+                  <dt>{tr('Redeemed so far', 'إجمالي المستبدل')}</dt>
+                  <dd>{loyaltyAccount.lifetimeRedeemed}</dd>
+                </div>
+              </dl>
+
+              {loyaltyError && (
+                <p className="ly-error" role="alert" style={{ marginBlockStart: 16 }}>
+                  <AlertCircle size={16} aria-hidden="true" />
+                  <span>{loyaltyError}</span>
+                </p>
+              )}
+
+              <div className="ly-card-actions">
                 <button
                   type="button"
-                  className="btn btn-sm btn-secondary"
+                  className="ly-btn ly-btn--light"
+                  onClick={() => navigate('/browse')}
+                >
+                  <ShoppingBag size={16} aria-hidden="true" />
+                  <span>{tr('Shop and use my points', 'تسوق واستخدم نقاطك')}</span>
+                  {isRtl ? (
+                    <ArrowLeft size={16} aria-hidden="true" />
+                  ) : (
+                    <ArrowRight size={16} aria-hidden="true" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="ly-btn ly-btn--ghost ly-btn--sm"
                   onClick={() => void refreshLoyaltyAccount()}
                   disabled={loyaltyLoading}
                 >
-                  <RefreshCw size={14} className={loyaltyLoading ? 'spin' : ''} />
-                  <span>{language === 'ar' ? 'تحديث الرصيد' : 'Refresh'}</span>
+                  <RefreshCw
+                    size={14}
+                    className={loyaltyLoading ? 'spin' : ''}
+                    aria-hidden="true"
+                  />
+                  <span>{tr('Refresh', 'تحديث الرصيد')}</span>
                 </button>
                 <button
                   type="button"
-                  className="btn btn-sm btn-secondary"
+                  className="ly-btn ly-btn--ghost ly-btn--sm"
                   onClick={clearLoyaltySession}
                 >
-                  <LogOut size={14} />
-                  <span>{language === 'ar' ? 'تسجيل الخروج' : 'Sign Out'}</span>
+                  <LogOut size={14} aria-hidden="true" />
+                  <span>{tr('Sign out', 'تسجيل الخروج')}</span>
                 </button>
               </div>
-            </div>
+            </>
+          )}
+        </section>
 
-            {/* Metric Tiles */}
-            <div className="dashboard-metrics-grid">
-              <div className="dashboard-metric-tile primary">
-                <div className="metric-label">{language === 'ar' ? 'الرصيد المتاح' : 'Available Balance'}</div>
-                <div className="metric-val">{loyaltyAccount.currentBalance}</div>
-                <div className="metric-sub">
-                  = {formatEgp(loyaltyAccount.availableDiscountEgp, language)}{' '}
-                  {language === 'ar' ? 'خصم فوري' : 'instant discount'}
-                </div>
+        {/* ---- How it works + rules ---- */}
+        <div className="ly-info">
+          <h2 className="ly-h2">{tr('How it works', 'طريقة العمل')}</h2>
+          <ol className="ly-steps">
+            <li>
+              <div>
+                <strong>{tr('Shop and earn', 'تسوّق واكسب')}</strong>
+                <span>
+                  {tr(
+                    `Every EGP ${rules.earnUnitAmountEgp} you spend earns ${rules.pointsEarnedPerUnit} point, counted on your final order total.`,
+                    `كل ${rules.earnUnitAmountEgp} جنيه تنفقها تمنحك ${rules.pointsEarnedPerUnit} نقطة، محسوبة على إجمالي طلبك النهائي.`
+                  )}
+                </span>
               </div>
-
-              <div className="dashboard-metric-tile">
-                <div className="metric-label">{language === 'ar' ? 'إجمالي النقاط المكتسبة' : 'Lifetime Earned'}</div>
-                <div className="metric-val text-green">{loyaltyAccount.lifetimeEarned}</div>
-                <div className="metric-sub">{language === 'ar' ? 'من مشترياتك السابقة' : 'From completed orders'}</div>
+            </li>
+            <li>
+              <div>
+                <strong>{tr('Verify your phone', 'أكّد رقم هاتفك')}</strong>
+                <span>
+                  {tr(
+                    'Confirm your number with a one-time code. Verification lasts 30 minutes.',
+                    'أكّد رقمك برمز لمرة واحدة. تستمر صلاحية التحقق 30 دقيقة.'
+                  )}
+                </span>
               </div>
-
-              <div className="dashboard-metric-tile">
-                <div className="metric-label">{language === 'ar' ? 'النقاط المستبدلة' : 'Points Redeemed'}</div>
-                <div className="metric-val text-muted">{loyaltyAccount.lifetimeRedeemed}</div>
-                <div className="metric-sub">{language === 'ar' ? 'تم استخدامها كخصومات' : 'Used towards discounts'}</div>
+            </li>
+            <li>
+              <div>
+                <strong>{tr('Redeem at checkout', 'استبدل عند الدفع')}</strong>
+                <span>
+                  {tr(
+                    `${rules.redemptionBlockPoints} points take EGP ${rules.redemptionBlockValueEgp} off your order.`,
+                    `كل ${rules.redemptionBlockPoints} نقطة تخصم ${rules.redemptionBlockValueEgp} جنيه من طلبك.`
+                  )}
+                </span>
               </div>
-            </div>
+            </li>
+          </ol>
 
-            {/* Action Bar */}
-            <div className="dashboard-shop-action">
-              <button
-                type="button"
-                className="btn btn-navy"
-                onClick={() => navigate('/browse')}
-              >
-                <ShoppingBag size={16} />
-                <span>{language === 'ar' ? 'تسوق واستخدم نقاطك' : 'Shop & Use My Points'}</span>
-                {isRtl ? <ArrowLeft size={16} /> : <ArrowRight size={16} />}
-              </button>
+          <h2 className="ly-h2">{tr('Redemption rules', 'قواعد الاستبدال')}</h2>
+          <dl className="ly-rules">
+            <div>
+              <dt>{tr('Minimum', 'الحد الأدنى')}</dt>
+              <dd>
+                <bdi>{rules.minRedemptionPoints}</bdi> {tr('points', 'نقطة')}
+              </dd>
             </div>
+            <div>
+              <dt>{tr('Redeem in multiples of', 'الاستبدال بمضاعفات')}</dt>
+              <dd>
+                <bdi>{rules.redemptionBlockPoints}</bdi> {tr('points', 'نقطة')}
+              </dd>
+            </div>
+            <div>
+              <dt>{tr('Maximum discount', 'أقصى خصم')}</dt>
+              <dd>
+                <bdi>{maxPercent}%</bdi> {tr('of the order total', 'من إجمالي الطلب')}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      {/* ---- Ledger ---- */}
+      {isVerified && loyaltyAccount && (
+        <section className="ly-panel" aria-labelledby="ly-ledger-title">
+          <div className="ly-panel-head">
+            <h2 id="ly-ledger-title">{tr('Points activity', 'سجل النقاط')}</h2>
+            <span className="ly-count">
+              <History size={14} aria-hidden="true" style={{ verticalAlign: '-2px' }} />{' '}
+              {tr(
+                `${loyaltyAccount.transactions.length} transactions`,
+                `${loyaltyAccount.transactions.length} معاملة`
+              )}
+            </span>
           </div>
 
-          {/* Transaction Ledger Table */}
-          <div className="card loyalty-ledger-card">
-            <div className="ledger-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <History size={18} color="var(--blue-600)" />
-                <h2>{language === 'ar' ? 'سجل المعاملات والنشاط' : 'Points Ledger & Activity'}</h2>
-              </div>
-              <span className="ledger-count">
-                {loyaltyAccount.transactions.length}{' '}
-                {language === 'ar' ? 'معاملة' : 'transactions'}
-              </span>
-            </div>
-
-            {loyaltyAccount.transactions.length === 0 ? (
-              <div className="ledger-empty">
-                <Coins size={32} color="#94a3b8" />
-                <p>
-                  {language === 'ar'
-                    ? 'لا توجد معاملات نقاط سابقة بعد. ستظهر نقاطك المكتسبة هنا بمجرد اكتمال طلباتك.'
-                    : 'No points activity recorded yet. Points earned on completed purchases will appear here.'}
-                </p>
-              </div>
-            ) : (
-              <div className="receipt-table-wrapper">
-                <table className="receipt-table">
-                  <thead>
-                    <tr>
-                      <th>{language === 'ar' ? 'نوع العملية' : 'Type'}</th>
-                      <th>{language === 'ar' ? 'الوصف' : 'Description'}</th>
-                      <th>{language === 'ar' ? 'رقم الطلب' : 'Order #'}</th>
-                      <th>{language === 'ar' ? 'التاريخ' : 'Date'}</th>
-                      <th className="num">{language === 'ar' ? 'النقاط' : 'Points'}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loyaltyAccount.transactions.map((tx) => {
-                      const isPositive = tx.pointsDelta > 0;
-                      return (
-                        <tr key={tx.id}>
-                          <td>
-                            <span className={`ledger-type-badge ${tx.type}`}>
-                              {isPositive ? (
-                                <TrendingUp size={13} />
-                              ) : (
-                                <TrendingDown size={13} />
-                              )}
-                              <span>
-                                {tx.type === 'earn'
-                                  ? t('earnedPointsBadge')
-                                  : tx.type === 'redeem'
-                                  ? t('redeemedPointsBadge')
-                                  : t('adjustedPointsBadge')}
-                              </span>
-                            </span>
-                          </td>
-                          <td>{tx.description}</td>
-                          <td>
-                            {tx.orderNumber ? (
-                              <button
-                                type="button"
-                                className="ledger-order-link"
-                                onClick={() => navigate(`/orders/${encodeURIComponent(tx.orderNumber!)}`)}
-                              >
-                                <bdi>{tx.orderNumber}</bdi>
-                              </button>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td>
-                            {new Date(tx.createdAt).toLocaleDateString(
-                              language === 'ar' ? 'ar-EG' : 'en-US',
-                              { dateStyle: 'medium' }
-                            )}
-                          </td>
-                          <td className={`num bold ${isPositive ? 'text-green' : 'text-red'}`}>
-                            {isPositive ? `+${tx.pointsDelta}` : tx.pointsDelta}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          {loyaltyAccount.transactions.length === 0 ? (
+            <p className="ly-empty">
+              {tr(
+                'No points activity yet. Points from your completed orders will show up here.',
+                'لا توجد معاملات نقاط بعد. ستظهر هنا النقاط المكتسبة من طلباتك المكتملة.'
+              )}
+            </p>
+          ) : (
+            <ul className="ly-ledger">
+              {loyaltyAccount.transactions.map((tx) => {
+                const isPositive = tx.pointsDelta > 0;
+                const tone =
+                  tx.type === 'earn'
+                    ? 'is-earn'
+                    : tx.type === 'redeem'
+                    ? 'is-redeem'
+                    : 'is-adjust';
+                return (
+                  <li key={tx.id} className={`ly-tx ${tone}`}>
+                    <span className="ly-tx-icon" aria-hidden="true">
+                      {isPositive ? <TrendingUp size={17} /> : <TrendingDown size={17} />}
+                    </span>
+                    <div className="ly-tx-main">
+                      <p className="ly-tx-desc">{tx.description}</p>
+                      <div className="ly-tx-meta">
+                        <span>{txLabel(tx.type)}</span>
+                        <span>
+                          {new Date(tx.createdAt).toLocaleDateString(
+                            language === 'ar' ? 'ar-EG' : 'en-US',
+                            { dateStyle: 'medium' }
+                          )}
+                        </span>
+                        {tx.orderNumber && (
+                          <button
+                            type="button"
+                            className="ly-order-link"
+                            onClick={() =>
+                              navigate(`/orders/${encodeURIComponent(tx.orderNumber!)}`)
+                            }
+                          >
+                            <bdi>{tx.orderNumber}</bdi>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <span className="ly-tx-points">
+                      <bdi dir="ltr">{isPositive ? `+${tx.pointsDelta}` : tx.pointsDelta}</bdi>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       )}
 
-      {/* Program FAQ Accordion / Summary */}
-      <section className="card loyalty-faq-card" aria-label="Frequently Asked Questions">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <HelpCircle size={18} color="var(--purple-600)" />
-          <h2>{language === 'ar' ? 'الأسئلة الشائعة حول برنامج الولاء' : 'Frequently Asked Questions'}</h2>
-        </div>
-
-        <div className="faq-items-list">
-          <div className="faq-item">
-            <h4>{language === 'ar' ? 'متى تُضاف النقاط المكتسبة إلى رصيدي؟' : 'When are earned points added to my balance?'}</h4>
-            <p>
-              {language === 'ar'
-                ? 'في طلبات الدفع عند الاستلام (COD) تُضاف النقاط فوراً بمجرد إنشاء الطلب، وفي طلبات الدفع بالبطاقة عبر Stripe تُضاف النقاط فور التحقق من إتمام الدفع بنجاح.'
-                : 'For Cash on Delivery (COD) orders, points are awarded immediately upon order creation. For Stripe card orders, points are awarded once payment verification succeeds.'}
-            </p>
-          </div>
-
-          <div className="faq-item">
-            <h4>{language === 'ar' ? 'هل يمكنني استبدال النقاط مع أي وسيلة دفع؟' : 'Can I use points with any payment method?'}</h4>
-            <p>
-              {language === 'ar'
-                ? 'نعم! يمكنك تطبيق خصم النقاط على مشترياتك سواء اخترت الدفع عند الاستلام (COD) أو الدفع الإلكتروني عبر Stripe.'
-                : 'Yes! Points discounts can be applied at checkout for both Cash on Delivery and Stripe Hosted card payment.'}
-            </p>
-          </div>
-
-          <div className="faq-item">
-            <h4>{language === 'ar' ? 'ماذا يحدث للنقاط المستبدلة إذا تم إلغاء الطلب؟' : 'What happens to redeemed points if an order is cancelled?'}</h4>
-            <p>
-              {language === 'ar'
-                ? 'وفقاً لسياسة النظام، يتم استرداد أي نقاط تم استبدالها تلقائياً إلى رصيدك إذا أُلغي الطلب قبل الشحن.'
-                : 'Any points redeemed on an order that is subsequently cancelled are returned to your account balance.'}
-            </p>
+      {loyaltyBackendAvailable === false && (
+        <div className="ly-notice" role="note">
+          <ShieldAlert size={18} aria-hidden="true" />
+          <div>
+            <strong>{tr('Backend contract notice:', 'ملاحظة للمطورين:')}</strong>{' '}
+            {tr(
+              'The /api/loyalty/* endpoints are not yet mounted on clothesai3d.runasp.net (returns 404). The frontend is fully integrated and ready to bind directly once LoyaltyController is deployed.',
+              'نقاط النهاية /api/loyalty/* غير متوفرة بعد على سيرفر clothesai3d.runasp.net (ترجع 404). البرنامج مصمم بالكامل وجاهز للربط الفوري بمجرد رفع متحكم LoyaltyController على الباك إند.'
+            )}
           </div>
         </div>
+      )}
+
+      {/* ---- FAQ ---- */}
+      <section className="ly-panel" aria-labelledby="ly-faq-title">
+        <div className="ly-panel-head">
+          <h2 id="ly-faq-title">{tr('Frequently asked questions', 'الأسئلة الشائعة')}</h2>
+        </div>
+        {faqs.map((item) => (
+          <details key={item.q} className="ly-faq-item">
+            <summary>
+              <span>{item.q}</span>
+              <ChevronDown size={18} aria-hidden="true" />
+            </summary>
+            <p>{item.a}</p>
+          </details>
+        ))}
       </section>
     </div>
   );
 }
-
