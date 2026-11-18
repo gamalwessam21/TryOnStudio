@@ -18,12 +18,74 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { GarmentImage } from '../../components/GarmentImage';
 import { commerceApi } from '../../services/commerceApi';
 import { ApiError } from '../../services/fashionApi';
+import { getOrCreateOrderIdempotencyKey } from '../../utils/orderIdempotencyKeys';
 import type { PersistedOrder } from '../../types/commerce';
 import {
   formatEgp,
-  generateIdempotencyKey,
   maskPhoneNumber,
 } from '../../utils/commerceHelpers';
+
+interface StripeVerificationEntry {
+  key: string;
+  promise: Promise<PersistedOrder>;
+}
+
+// Sends verify-payment at most once per (order, session) while the page is open. Re-runs of the
+// load effect and StrictMode's double-invocation reuse the in-flight promise. A failed request is
+// dropped from the cache, so a later attempt sends a new one.
+function requestStripeVerification(
+  cacheRef: { current: StripeVerificationEntry | null },
+  orderNumber: string,
+  sessionId: string
+): Promise<PersistedOrder> {
+  const key = `${orderNumber}::${sessionId}`;
+  const cached = cacheRef.current;
+  if (cached && cached.key === key) {
+    return cached.promise;
+  }
+  const promise = commerceApi.confirmOrderStripeSession(orderNumber, sessionId);
+  const entry: StripeVerificationEntry = { key, promise };
+  cacheRef.current = entry;
+  void promise.catch(() => {
+    if (cacheRef.current === entry) {
+      cacheRef.current = null;
+    }
+  });
+  return promise;
+}
+
+// Rate-limit (429) and outage (503) copy for the receipt paths. Returns null for other errors,
+// so callers keep their existing messages.
+function transientReceiptErrorMessage(err: unknown, language: string): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const isAr = language === 'ar';
+  if (err.status === 429) {
+    const waitSec = err.retryAfterSeconds ?? 30;
+    return isAr
+      ? `تم تجاوز عدد الطلبات المسموح به. يرجى الانتظار ${waitSec} ثانية ثم إعادة المحاولة.`
+      : `Too many requests. Please wait ${waitSec} seconds before trying again.`;
+  }
+  if (err.status === 503) {
+    const waitSec = err.retryAfterSeconds;
+    if (isAr) {
+      return waitSec
+        ? `خدمة الإيصالات غير متاحة مؤقتاً. يرجى المحاولة بعد ${waitSec} ثانية.`
+        : 'خدمة الإيصالات غير متاحة مؤقتاً. يرجى المحاولة مرة أخرى بعد قليل.';
+    }
+    return waitSec
+      ? `The receipt service is temporarily unavailable. Please try again in ${waitSec} seconds.`
+      : 'The receipt service is temporarily unavailable. Please try again shortly.';
+  }
+  return null;
+}
+
+// Seconds before a retry is allowed. 429 uses Retry-After (default 30). 503 uses Retry-After when present.
+function transientRetrySeconds(err: unknown): number {
+  if (!(err instanceof ApiError)) return 0;
+  if (err.status === 429) return err.retryAfterSeconds ?? 30;
+  if (err.status === 503) return err.retryAfterSeconds ?? 0;
+  return 0;
+}
 
 export function ReceiptPage() {
   const { orderNumber } = useParams<{ orderNumber: string }>();
@@ -49,8 +111,15 @@ export function ReceiptPage() {
   const [error, setError] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [verifiedStripe, setVerifiedStripe] = useState(false);
+  // Mounted flag and in-flight Stripe verification live in refs, so they survive effect re-runs
+  // and React StrictMode's double-invocation (see requestStripeVerification below).
+  const isMountedRef = useRef(false);
+  const stripeVerificationRef = useRef<StripeVerificationEntry | null>(null);
   const [startingStripe, setStartingStripe] = useState(false);
+  // Retry state for rate-limit (429) and outage (503) responses on the receipt paths.
+  const [retryCountdown, setRetryCountdown] = useState(0);
+  const [errorRetryable, setErrorRetryable] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const sessionId = searchParams.get('session_id');
   const paymentCancelled =
@@ -77,19 +146,45 @@ export function ReceiptPage() {
     }
   }, [paymentCancelled, language]);
 
+  // Counts down a retry wait so the retry and refresh controls re-enable at the right time.
+  useEffect(() => {
+    if (retryCountdown <= 0) return;
+    const timer = window.setInterval(() => {
+      setRetryCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryCountdown]);
+
+  // Tracks whether the page is mounted. Unlike the per-run active flag, this is not reset when the
+  // load effect re-runs, so a verification result is still applied after a re-run.
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Load or verify order from authoritative ASP.NET backend
   useEffect(() => {
     const targetOrderNumber = orderNumber;
     if (!targetOrderNumber) return;
 
     let active = true;
+    setOrder((previous) =>
+      previous?.orderNumber === targetOrderNumber ? previous : null
+    );
+    setError(null);
 
     async function loadAndVerify(resolvedNum: string) {
       setLoading(true);
       setError(null);
+      setErrorRetryable(false);
 
       try {
-        let currentOrder = orderRef.current ?? recentConfirmedOrdersRef.current[resolvedNum] ?? null;
+        let currentOrder =
+          (orderRef.current?.orderNumber === resolvedNum ? orderRef.current : null) ??
+          recentConfirmedOrdersRef.current[resolvedNum] ??
+          null;
         const storedToken =
           getReceiptToken(resolvedNum) || currentOrder?.receiptAccessToken || null;
 
@@ -97,15 +192,16 @@ export function ReceiptPage() {
           saveReceiptToken(resolvedNum, storedToken);
         }
 
-        // 1. If returned from Stripe with ?session_id=..., verify payment via POST /api/orders/{orderNumber}/verify-payment
-        if (sessionId && !verifiedStripe) {
-          setVerifiedStripe(true);
+        // 1. If returned from Stripe with ?session_id=..., verify payment via POST /api/orders/{orderNumber}/verify-payment.
+        // The request is shared through stripeVerificationRef, so an effect re-run does not send it again.
+        if (sessionId) {
           try {
-            const confirmedRemote = await commerceApi.confirmOrderStripeSession(
+            const confirmedRemote = await requestStripeVerification(
+              stripeVerificationRef,
               resolvedNum,
               sessionId
             );
-            if (confirmedRemote && active) {
+            if (confirmedRemote && isMountedRef.current) {
               const preservedToken =
                 confirmedRemote.receiptAccessToken || storedToken || null;
               currentOrder = {
@@ -121,8 +217,12 @@ export function ReceiptPage() {
             }
           } catch (confirmErr: unknown) {
             console.error('[receipt] Backend Stripe payment verification error:', confirmErr);
-            if (active) {
-              if (confirmErr instanceof ApiError) {
+            if (isMountedRef.current) {
+              const transientVerifyMessage = transientReceiptErrorMessage(confirmErr, language);
+              if (transientVerifyMessage) {
+                setVerificationNotice(transientVerifyMessage);
+                setRetryCountdown(transientRetrySeconds(confirmErr));
+              } else if (confirmErr instanceof ApiError) {
                 if (confirmErr.status === 404 && confirmErr.code === 'session_not_found') {
                   setVerificationNotice(
                     language === 'ar'
@@ -164,13 +264,22 @@ export function ReceiptPage() {
             return;
           }
         } catch (fetchErr: unknown) {
+          const transientMessage = transientReceiptErrorMessage(fetchErr, language);
           if (currentOrder && active) {
             setOrder(currentOrder);
+            if (transientMessage) {
+              setVerificationNotice(transientMessage);
+              setRetryCountdown(transientRetrySeconds(fetchErr));
+            }
             return;
           }
 
           if (active) {
-            if (fetchErr instanceof ApiError && (fetchErr.status === 401 || fetchErr.status === 403)) {
+            if (transientMessage) {
+              setError(transientMessage);
+              setErrorRetryable(true);
+              setRetryCountdown(transientRetrySeconds(fetchErr));
+            } else if (fetchErr instanceof ApiError && (fetchErr.status === 401 || fetchErr.status === 403)) {
               setError(
                 language === 'ar'
                   ? 'يتطلب عرض هذا الإيصال رمز الوصول الآمن (X-Receipt-Token) المحفوظ في المتصفح الذي تم إنشاء الطلب منه.'
@@ -206,11 +315,11 @@ export function ReceiptPage() {
   }, [
     orderNumber,
     sessionId,
-    verifiedStripe,
     recordConfirmedOrder,
     getReceiptToken,
     saveReceiptToken,
     language,
+    reloadNonce,
   ]);
 
   const handleCopyOrderNumber = async () => {
@@ -234,9 +343,16 @@ export function ReceiptPage() {
     setVerificationNotice(null);
     try {
       const effectiveToken =
-        getReceiptToken(orderNumber) || order?.receiptAccessToken || null;
+        getReceiptToken(orderNumber) ||
+        (order?.orderNumber === orderNumber ? order.receiptAccessToken : null) ||
+        null;
 
-      if (sessionId && order?.paymentMethod === 'stripe' && order?.paymentStatus !== 'paid') {
+      if (
+        sessionId &&
+        order?.orderNumber === orderNumber &&
+        order.paymentMethod === 'stripe' &&
+        order.paymentStatus !== 'paid'
+      ) {
         try {
           const verifiedOrder = await commerceApi.confirmOrderStripeSession(
             orderNumber,
@@ -271,7 +387,11 @@ export function ReceiptPage() {
       setOrder(merged);
       recordConfirmedOrder(merged);
     } catch (err: unknown) {
-      if (err instanceof Error) {
+      const transientMessage = transientReceiptErrorMessage(err, language);
+      if (transientMessage) {
+        setVerificationNotice(transientMessage);
+        setRetryCountdown(transientRetrySeconds(err));
+      } else if (err instanceof Error) {
         setVerificationNotice(err.message);
       }
     } finally {
@@ -280,7 +400,7 @@ export function ReceiptPage() {
   };
 
   const handlePayStripeNow = async () => {
-    if (!order) return;
+    if (!order || !orderNumber || order.orderNumber !== orderNumber) return;
     setStartingStripe(true);
     setVerificationNotice(null);
     try {
@@ -293,13 +413,25 @@ export function ReceiptPage() {
       const stripeSession = await commerceApi.createStripeCheckoutSession({
         orderNumber: order.orderNumber,
         receiptAccessToken: effectiveToken,
-        idempotencyKey: generateIdempotencyKey(),
+        idempotencyKey: getOrCreateOrderIdempotencyKey(order.orderNumber),
+        verifiedDiscountEgp: order.discountEgp,
       });
       if (stripeSession.checkoutUrl) {
         window.location.href = stripeSession.checkoutUrl;
         return;
       }
+      setVerificationNotice(
+        language === 'ar'
+          ? 'لم يرجع الخادم رابطاً صالحاً للدفع عبر Stripe. يرجى المحاولة مرة أخرى.'
+          : 'The server did not return a valid Stripe Checkout URL. Please try again.'
+      );
     } catch (err: unknown) {
+      const transientMessage = transientReceiptErrorMessage(err, language);
+      if (transientMessage) {
+        setVerificationNotice(transientMessage);
+        setRetryCountdown(transientRetrySeconds(err));
+        return;
+      }
       setVerificationNotice(
         err instanceof Error
           ? err.message
@@ -331,6 +463,25 @@ export function ReceiptPage() {
         <AlertCircle size={36} color="var(--red-600)" />
         <h2>{language === 'ar' ? 'تعذر العثور على الإيصال' : 'Receipt Not Found'}</h2>
         <p>{error}</p>
+        {errorRetryable && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setReloadNonce((n) => n + 1)}
+            disabled={retryCountdown > 0}
+          >
+            <RefreshCw size={16} />
+            <span>
+              {retryCountdown > 0
+                ? language === 'ar'
+                  ? `إعادة المحاولة بعد ${retryCountdown} ث`
+                  : `Try again in ${retryCountdown}s`
+                : language === 'ar'
+                  ? 'إعادة المحاولة'
+                  : 'Try again'}
+            </span>
+          </button>
+        )}
         <button type="button" className="btn btn-secondary" onClick={() => navigate('/browse')}>
           <ArrowLeft size={16} />
           <span>{t('returnShopping')}</span>
@@ -351,6 +502,8 @@ export function ReceiptPage() {
     order.paymentMethod === 'stripe' &&
     order.paymentStatus === 'pending_payment' &&
     !isCancelledOrRefunded;
+
+  const isFailed = order.paymentStatus === 'failed';
 
   const expectedPointsOnVerify =
     Math.floor(order.finalTotalEgp / loyaltyRules.earnUnitAmountEgp) *
@@ -392,7 +545,7 @@ export function ReceiptPage() {
             type="button"
             className="btn btn-sm btn-secondary"
             onClick={() => void handleRefreshStatus()}
-            disabled={loading}
+            disabled={loading || retryCountdown > 0}
           >
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
             <span>{t('viewOrderDetails')}</span>
@@ -455,6 +608,11 @@ export function ReceiptPage() {
                   {language === 'ar' ? 'الطلب ملغى / مسترد' : 'Order Cancelled / Refunded'}
                 </span>
               </div>
+            ) : isFailed ? (
+              <div className="receipt-badge" style={{ color: 'var(--red-600)' }}>
+                <XCircle size={16} />
+                <span>{language === 'ar' ? 'فشل الدفع' : 'Payment Failed'}</span>
+              </div>
             ) : isCod ? (
               <div className="receipt-badge cod">
                 <Clock size={16} />
@@ -472,6 +630,45 @@ export function ReceiptPage() {
             )}
           </div>
         </header>
+
+        {isFailed && (
+          <div
+            className="card print-hide"
+            role="alert"
+            style={{ border: '1px solid var(--red-600)', padding: 16, marginBottom: 16 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-600)', fontWeight: 600 }}>
+              <AlertCircle size={18} />
+              <span>{language === 'ar' ? 'تعذرت معالجة الدفع لهذا الطلب.' : 'We could not process the payment for this order.'}</span>
+            </div>
+            <p style={{ margin: '8px 0 12px' }}>
+              {language === 'ar'
+                ? 'يمكنك إعادة محاولة الدفع لهذا الطلب، أو إنشاء طلب جديد واختيار طريقة دفع أخرى.'
+                : 'You can retry the payment for this order, or place a new order and choose another payment method.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {order.paymentMethod === 'stripe' && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-purple"
+                  onClick={() => void handlePayStripeNow()}
+                  disabled={startingStripe}
+                >
+                  <CreditCard size={14} />
+                  <span>{language === 'ar' ? 'إعادة محاولة الدفع' : 'Retry payment'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => navigate('/cart')}
+              >
+                <ArrowLeft size={14} />
+                <span>{language === 'ar' ? 'طلب جديد' : 'Place a new order'}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Order Meta Bar */}
         <div className="receipt-meta-grid">
