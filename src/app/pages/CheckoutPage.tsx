@@ -27,6 +27,7 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { GarmentImage } from '../../components/GarmentImage';
 import { commerceApi } from '../../services/commerceApi';
 import { ApiError } from '../../services/fashionApi';
+import { getOrCreateOrderIdempotencyKey, rememberOrderIdempotencyKey } from '../../utils/orderIdempotencyKeys';
 import type {
   CartItem,
   CreateOrderPayload,
@@ -41,6 +42,12 @@ import {
   generateIdempotencyKey,
   validateCustomerInfo,
 } from '../../utils/commerceHelpers';
+
+// Items without a size must be sent as null. Trims stray whitespace from size values.
+function normalizeSizeForPayload(size: string | null | undefined): string | null {
+  const trimmed = typeof size === 'string' ? size.trim() : '';
+  return trimmed ? trimmed : null;
+}
 
 export function CheckoutPage() {
   const { language, isRtl, t } = useLanguage();
@@ -88,6 +95,18 @@ export function CheckoutPage() {
   const [pointsInput, setPointsInput] = useState<number>(0);
   const [formErrors, setFormErrors] = useState<{ fullName?: string; phone?: string }>({});
   const [submitting, setSubmitting] = useState(false);
+  // Seconds until Place Order may be used again after a 429 or 503 response.
+  const [submitCooldown, setSubmitCooldown] = useState(0);
+  useEffect(() => {
+    if (submitCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setSubmitCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [submitCooldown]);
+
+  // Synchronous guard, set before the first await, so a second click cannot start another order.
+  const submitInFlightRef = useRef(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [cartNotice, setCartNotice] = useState<string | null>(null);
 
@@ -189,6 +208,14 @@ export function CheckoutPage() {
 
   const appliedDiscountEgp = redemptionPreview.valid ? redemptionPreview.discountEgp : 0;
   const finalTotalEgp = Math.max(0, subtotalEgp - appliedDiscountEgp);
+
+  // Stripe needs a payable amount and a configured server. Otherwise it is unavailable and COD is selected.
+  const stripeUnavailable = finalTotalEgp <= 0 || !stripeConfigured;
+  useEffect(() => {
+    if (stripeUnavailable && paymentMethod === 'stripe') {
+      setPaymentMethod('cod');
+    }
+  }, [stripeUnavailable, paymentMethod]);
 
   // Potential points that will be earned on this purchase
   const potentialPointsEarned =
@@ -294,12 +321,18 @@ export function CheckoutPage() {
       const stripeSession = await commerceApi.createStripeCheckoutSession({
         orderNumber: orderToPay.orderNumber,
         receiptAccessToken: orderToPay.receiptAccessToken ?? null,
-        idempotencyKey: generateIdempotencyKey(),
+        idempotencyKey: getOrCreateOrderIdempotencyKey(orderToPay.orderNumber),
+        verifiedDiscountEgp: orderToPay.discountEgp,
       });
       if (stripeSession.checkoutUrl) {
         window.location.href = stripeSession.checkoutUrl;
         return;
       }
+      setSubmissionError(
+        language === 'ar'
+          ? 'لم يرجع الخادم رابطاً صالحاً للدفع عبر Stripe. يرجى المحاولة مرة أخرى.'
+          : 'The server did not return a valid Stripe Checkout URL. Please try again.'
+      );
     } catch (err: unknown) {
       const msg =
         err instanceof Error
@@ -315,6 +348,9 @@ export function CheckoutPage() {
 
   const handlePlaceOrder = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitInFlightRef.current) {
+      return;
+    }
     setSubmissionError(null);
     setCartNotice(null);
 
@@ -370,13 +406,14 @@ export function CheckoutPage() {
       return;
     }
 
+    submitInFlightRef.current = true;
     setSubmitting(true);
 
     const payload: CreateOrderPayload = {
       items: activeLines.map((line) => ({
         fashionItemId: line.fashionItemId,
         variantId: line.variantId,
-        size: line.size,
+        size: normalizeSizeForPayload(line.size),
         quantity: line.quantity,
       })),
       customer: {
@@ -390,6 +427,8 @@ export function CheckoutPage() {
 
     try {
       const order = await commerceApi.createOrder(payload, idempotencyKey);
+      // Remember this order's key so any later Stripe retry reuses it (same request, same key).
+      rememberOrderIdempotencyKey(order.orderNumber, idempotencyKey);
 
       // Step 2: Immediately persist receiptAccessToken and confirmed order BEFORE redirecting or making another request
       if (order.receiptAccessToken) {
@@ -414,12 +453,20 @@ export function CheckoutPage() {
             orderNumber: order.orderNumber,
             receiptAccessToken: order.receiptAccessToken ?? null,
             idempotencyKey,
+            verifiedDiscountEgp: order.discountEgp,
           });
 
           if (stripeSession.checkoutUrl) {
             window.location.href = stripeSession.checkoutUrl;
             return;
           }
+          setPendingStripeOrder(order);
+          setSubmissionError(
+            language === 'ar'
+              ? 'تم إنشاء الطلب بنجاح، ولكن لم يرجع الخادم رابطاً صالحاً للدفع عبر Stripe.'
+              : 'Your order was created, but the server did not return a valid Stripe Checkout URL.'
+          );
+          return;
         } catch (stripeErr: unknown) {
           console.error('[checkout] Stripe session creation failed after order creation:', stripeErr);
           setPendingStripeOrder(order);
@@ -481,8 +528,42 @@ export function CheckoutPage() {
           return;
         }
 
+        if (err.status === 403) {
+          setSubmissionError(
+            language === 'ar'
+              ? 'رقم الهاتف لا يطابق رقم التحقق. يرجى التحقق من الرقم مرة أخرى.'
+              : 'This phone number does not match your verification. Please verify your phone again.'
+          );
+          return;
+        }
+
+        if (err.status === 413) {
+          setSubmissionError(
+            language === 'ar'
+              ? 'حجم الطلب كبير جداً. يرجى تقليل عدد القطع والمحاولة مرة أخرى.'
+              : 'This order is too large to submit. Please reduce the number of items and try again.'
+          );
+          return;
+        }
+
+        if (err.status === 503) {
+          const waitSec = err.retryAfterSeconds;
+          setSubmitCooldown(waitSec ?? 0);
+          setSubmissionError(
+            language === 'ar'
+              ? waitSec
+                ? `الخدمة غير متاحة مؤقتاً. يرجى المحاولة بعد ${waitSec} ثانية.`
+                : 'الخدمة غير متاحة مؤقتاً. يرجى المحاولة لاحقاً.'
+              : waitSec
+                ? `Checkout is temporarily unavailable. Please try again in ${waitSec} seconds.`
+                : 'Checkout is temporarily unavailable. Please try again shortly.'
+          );
+          return;
+        }
+
         if (err.status === 429) {
           const waitSec = err.retryAfterSeconds ?? 30;
+          setSubmitCooldown(waitSec);
           setSubmissionError(
             language === 'ar'
               ? `تم تجاوز الحد المسموح به للطلبات. يرجى الانتظار ${waitSec} ثانية قبل المحاولة مرة أخرى.`
@@ -497,6 +578,7 @@ export function CheckoutPage() {
         msg || (language === 'ar' ? 'تعذر إتمام الطلب.' : 'Could not complete order.')
       );
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -1049,7 +1131,10 @@ export function CheckoutPage() {
                   name="paymentMethod"
                   value="stripe"
                   checked={paymentMethod === 'stripe'}
-                  onChange={() => setPaymentMethod('stripe')}
+                  disabled={stripeUnavailable}
+                  onChange={() => {
+                    if (!stripeUnavailable) setPaymentMethod('stripe');
+                  }}
                 />
                 <div className="payment-option-icon">
                   <CreditCard size={22} color="var(--purple-600)" />
@@ -1057,12 +1142,19 @@ export function CheckoutPage() {
                 <div className="payment-option-content">
                   <div className="payment-option-title">{t('stripeTitle')}</div>
                   <div className="payment-option-desc">{t('stripeDesc')}</div>
+                  {stripeUnavailable && (
+                    <div className="payment-option-desc">
+                      {language === 'ar'
+                        ? 'غير متاح عندما يكون الإجمالي 0 ج.م أو عند عدم إعداد Stripe. يرجى اختيار الدفع عند الاستلام.'
+                        : 'Not available when the payable total is 0 EGP or Stripe is not set up. Please choose Cash on Delivery.'}
+                    </div>
+                  )}
                   <span className="payment-status-tag stripe">
                     {stripeConfigured
                       ? stripeMode === 'sandbox'
                         ? 'Stripe Sandbox Active'
                         : 'Stripe Live'
-                      : 'Sandbox Mode Active'}
+                      : 'Stripe unavailable'}
                   </span>
                 </div>
               </label>
@@ -1118,7 +1210,7 @@ export function CheckoutPage() {
                       <input
                         type="text"
                         className="checkout-input otp"
-                        placeholder="Enter 6-digit code (e.g. 123456)"
+                        placeholder={language === 'ar' ? 'أدخل رمز التحقق المكون من 6 أرقام' : 'Enter 6-digit verification code'}
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value)}
                         maxLength={8}
@@ -1333,7 +1425,7 @@ export function CheckoutPage() {
             <button
               type="submit"
               className={`btn ${paymentMethod === 'stripe' ? 'btn-purple' : 'btn-navy'} btn-block checkout-submit-btn`}
-              disabled={submitting || hasMissingSize}
+              disabled={submitting || hasMissingSize || submitCooldown > 0}
             >
               {submitting ? (
                 <>

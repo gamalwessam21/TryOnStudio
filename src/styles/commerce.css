@@ -142,6 +142,7 @@
   from {
     transform: translateX(100%);
   }
+
   to {
     transform: translateX(0);
   }
@@ -151,6 +152,7 @@
   from {
     transform: translateX(-100%);
   }
+
   to {
     transform: translateX(0);
   }
@@ -583,10 +585,14 @@
 }
 
 @keyframes typingBounce {
-  0%, 80%, 100% {
+
+  0%,
+  80%,
+  100% {
     transform: scale(0.6);
     opacity: 0.4;
   }
+
   40% {
     transform: scale(1);
     opacity: 1;
@@ -1434,12 +1440,14 @@
     background: #ffffff !important;
     color: #000000 !important;
   }
+
   .app-shell,
   .main-wrapper,
   .main-content {
     padding: 0 !important;
     margin: 0 !important;
   }
+
   .sidebar,
   .top-header,
   .assistant-fab,
@@ -1451,11 +1459,13 @@
   .print-hide {
     display: none !important;
   }
+
   .receipt-page {
     max-width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
   }
+
   .receipt-paper {
     border: none !important;
     box-shadow: none !important;
@@ -2800,12 +2810,10 @@
   width: 130px;
   height: 18px;
   border-radius: 50%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(15, 23, 42, 0.18) 0%,
-    rgba(15, 23, 42, 0.05) 55%,
-    transparent 80%
-  );
+  background: radial-gradient(ellipse at center,
+      rgba(15, 23, 42, 0.18) 0%,
+      rgba(15, 23, 42, 0.05) 55%,
+      transparent 80%);
   pointer-events: none;
 }
 
@@ -2832,6 +2840,7 @@
     opacity: 0;
     transform: translateX(-50%) translateY(8px) scale(0.92);
   }
+
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0) scale(1);
@@ -2926,12 +2935,10 @@
   justify-content: space-between;
   gap: 20px;
   padding: 18px 28px 22px;
-  background: linear-gradient(
-    to top,
-    rgba(248, 250, 252, 0.92) 0%,
-    rgba(248, 250, 252, 0.55) 65%,
-    transparent 100%
-  );
+  background: linear-gradient(to top,
+      rgba(248, 250, 252, 0.92) 0%,
+      rgba(248, 250, 252, 0.55) 65%,
+      transparent 100%);
   flex-wrap: wrap;
 }
 
@@ -3760,7 +3767,3 @@
     font-size: 1.65rem;
   }
 }
-
-
-
-

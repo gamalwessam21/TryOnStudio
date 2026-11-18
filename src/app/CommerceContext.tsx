@@ -34,6 +34,18 @@ import { useStudio } from './StudioContext';
 export const CART_STORAGE_KEY = 'tys.cart';
 export const RECEIPT_TOKENS_STORAGE_KEY = 'tys.receiptTokens';
 export const CONFIRMED_ORDERS_SESSION_KEY = 'tryonstudio_session_orders';
+
+// Receipt tokens are kept in tys.receiptTokens (localStorage) and in React memory only.
+// The session order cache must not hold them, so they are removed before the cache is written.
+function withoutReceiptTokens(
+  orders: Record<string, PersistedOrder>
+): Record<string, PersistedOrder> {
+  const sanitized: Record<string, PersistedOrder> = {};
+  for (const [orderNumber, order] of Object.entries(orders)) {
+    sanitized[orderNumber] = { ...order, receiptAccessToken: null };
+  }
+  return sanitized;
+}
 export const MAX_CART_LINES = 20;
 export const MAX_LINE_QUANTITY = 20;
 export const MAX_ASSISTANT_MESSAGE_CHARS = 1200;
@@ -972,7 +984,7 @@ export function CommerceProvider({ children }: { children: ReactNode }) {
         if (typeof window !== 'undefined' && window.sessionStorage) {
           window.sessionStorage.setItem(
             CONFIRMED_ORDERS_SESSION_KEY,
-            JSON.stringify(next)
+            JSON.stringify(withoutReceiptTokens(next))
           );
         }
       } catch {

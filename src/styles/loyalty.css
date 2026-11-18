@@ -1,0 +1,664 @@
+/* ==========================================================================
+   Loyalty page redesign  (branch: feature/loyalty-page-redesign)
+   Scoped under .ly — uses tokens.css variables and logical properties (RTL-safe).
+   Old .loyalty-* rules in commerce.css are no longer used by LoyaltyPage.
+   ========================================================================== */
+
+.ly {
+  max-width: 1040px;
+  margin-inline: auto;
+  padding-block: 8px 56px;
+  display: grid;
+  gap: 40px;
+  color: var(--text-primary);
+}
+
+.ly :focus-visible {
+  outline: 3px solid var(--blue-500);
+  outline-offset: 2px;
+}
+
+.ly-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Hero layout ---------- */
+
+.ly-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    'intro card'
+    'info  card';
+  column-gap: 48px;
+  row-gap: 32px;
+  align-items: start;
+}
+
+.ly-intro { grid-area: intro; }
+.ly-info { grid-area: info; }
+.ly-card { grid-area: card; }
+
+.ly-title {
+  margin: 0;
+  font-size: clamp(1.75rem, 1.1rem + 2vw, 2.4rem);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.ly-lead {
+  margin: 12px 0 0;
+  max-width: 46ch;
+  color: var(--text-secondary);
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .ly { gap: 32px; }
+  .ly-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'intro'
+      'card'
+      'info';
+    row-gap: 24px;
+  }
+}
+
+/* ---------- Info: steps + rules ---------- */
+
+.ly-h2 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ly-steps {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+  counter-reset: ly-step;
+}
+
+.ly-steps li {
+  counter-increment: ly-step;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: start;
+}
+
+.ly-steps li::before {
+  content: counter(ly-step);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  background: var(--purple-50);
+  border: 1px solid var(--purple-border);
+  color: var(--purple-700);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.ly-steps strong {
+  display: block;
+  font-size: 0.98rem;
+  font-weight: 650;
+  margin-block-end: 2px;
+}
+
+.ly-steps span {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.ly-rules {
+  margin: 0;
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.ly-rules div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+  border-block-end: 1px solid var(--border-subtle);
+  font-size: 0.92rem;
+}
+
+.ly-rules dt { color: var(--text-secondary); }
+
+.ly-rules dd {
+  margin: 0;
+  font-weight: 650;
+  text-align: end;
+}
+
+/* ---------- Rewards card (the one bold element) ---------- */
+
+.ly-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 28px;
+  border-radius: var(--radius-xl);
+  color: #fff;
+  background: linear-gradient(150deg, #0f172a 0%, #1e1b4b 52%, #4c1d95 100%);
+  box-shadow: var(--shadow-lg);
+}
+
+.ly-card::after {
+  content: '';
+  position: absolute;
+  inset-block-start: -130px;
+  inset-inline-end: -100px;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 0 0 44px rgba(255, 255, 255, 0.035),
+    0 0 0 88px rgba(255, 255, 255, 0.02);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.ly-card :focus-visible { outline-color: #fff; }
+
+.ly-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block-end: 22px;
+}
+
+.ly-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ly-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(16, 185, 129, 0.18);
+  color: #a7f3d0;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ly-card-title {
+  margin: 0 0 6px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ly-card-desc {
+  margin: 0 0 20px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+.ly-form {
+  display: grid;
+  gap: 14px;
+}
+
+.ly-label {
+  display: block;
+  margin-block-end: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.ly-input {
+  width: 100%;
+  height: 50px;
+  padding-inline: 14px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--navy-900);
+  font: inherit;
+  font-size: 1.02rem;
+  letter-spacing: 0.02em;
+}
+
+.ly-input::placeholder { color: var(--text-muted); }
+
+.ly-input:focus {
+  outline: none;
+  border-color: #c4b5fd;
+  box-shadow: 0 0 0 3px rgba(196, 181, 253, 0.45);
+}
+
+.ly-input.has-error { border-color: #f87171; }
+
+.ly-input:disabled { opacity: 0.7; }
+
+/* Buttons that sit on the dark card */
+
+.ly-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding-inline: 20px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.ly-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ly-btn--light {
+  background: #fff;
+  color: var(--navy-900);
+}
+
+.ly-btn--light:hover:not(:disabled) { background: var(--purple-100); }
+
+.ly-btn--ghost {
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.ly-btn--ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+
+.ly-btn--sm {
+  height: 38px;
+  padding-inline: 14px;
+  font-size: 0.85rem;
+}
+
+.ly-btn--block { width: 100%; }
+
+.ly-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  color: #ddd6fe;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.ly-link:hover:not(:disabled) { color: #fff; }
+.ly-link:disabled { opacity: 0.55; cursor: not-allowed; text-decoration: none; }
+
+.ly-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+/* OTP: one real input (autofill / paste / screen readers) over six display cells */
+
+.ly-otp {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  direction: ltr;
+}
+
+.ly-otp-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  font-size: 16px; /* prevents iOS zoom */
+  cursor: text;
+}
+
+.ly-otp-cell {
+  display: grid;
+  place-items: center;
+  height: 58px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--navy-900);
+  font-size: 1.6rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.ly-otp.is-focused .ly-otp-cell.is-active {
+  border-color: #c4b5fd;
+  box-shadow: 0 0 0 3px rgba(196, 181, 253, 0.45);
+}
+
+.ly-otp.is-invalid .ly-otp-cell { border-color: #f87171; }
+.ly-otp.is-disabled .ly-otp-cell { opacity: 0.6; }
+
+.ly-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ly-timer.is-expired { color: #fecaca; }
+
+.ly-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ly-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--red-50);
+  color: var(--red-700);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.ly-error svg { flex-shrink: 0; margin-block-start: 2px; }
+
+.ly-field-error {
+  margin: 6px 0 0;
+  color: #fecaca;
+  font-size: 0.85rem;
+}
+
+/* Verified state */
+
+.ly-balance-label {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ly-balance {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-block: 4px 2px;
+}
+
+.ly-balance-num {
+  font-size: clamp(3rem, 2rem + 4vw, 4rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ly-balance-unit {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ly-balance-value {
+  margin: 0 0 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fde68a;
+}
+
+.ly-progress {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.ly-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #fcd34d;
+  transition: width var(--duration-normal) var(--ease-standard);
+}
+
+.ly-progress-note {
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ly-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-block-start: 24px;
+  padding-block-start: 18px;
+  border-block-start: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.ly-stat dt {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ly-stat dd {
+  margin: 2px 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ly-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block-start: 22px;
+}
+
+.ly-card-actions .ly-btn--light { flex: 1 1 100%; }
+
+.ly-phone {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ---------- Light panels: ledger, FAQ, notice ---------- */
+
+.ly-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.ly-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+}
+
+.ly-panel-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.ly-count {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.ly-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ly-tx {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.ly-tx-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+}
+
+.ly-tx.is-earn .ly-tx-icon { background: var(--green-50); color: var(--green-600); }
+.ly-tx.is-redeem .ly-tx-icon { background: var(--red-50); color: var(--red-700); }
+.ly-tx.is-adjust .ly-tx-icon { background: var(--amber-50); color: var(--amber-700); }
+
+.ly-tx-main { min-width: 0; }
+
+.ly-tx-desc {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.ly-tx-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-block-start: 3px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.ly-order-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--blue-600);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ly-tx-points {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ly-tx.is-earn .ly-tx-points { color: var(--green-600); }
+.ly-tx.is-redeem .ly-tx-points { color: var(--red-700); }
+.ly-tx.is-adjust .ly-tx-points { color: var(--amber-700); }
+
+.ly-empty {
+  margin: 0;
+  padding: 28px 22px 32px;
+  border-block-start: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.ly-faq-item { border-block-start: 1px solid var(--border-subtle); }
+
+.ly-faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 22px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ly-faq-item summary::-webkit-details-marker { display: none; }
+
+.ly-faq-item summary svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.ly-faq-item[open] summary svg { transform: rotate(180deg); }
+
+.ly-faq-item p {
+  margin: 0;
+  padding: 0 22px 18px;
+  max-width: 70ch;
+  color: var(--text-secondary);
+  font-size: 0.93rem;
+  line-height: 1.65;
+}
+
+.ly-notice {
+  display: flex;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 1px solid var(--amber-border);
+  border-radius: var(--radius-md);
+  background: var(--amber-50);
+  color: var(--amber-700);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.ly-notice svg { flex-shrink: 0; margin-block-start: 2px; }
+
+@media (max-width: 520px) {
+  .ly-card { padding: 22px 18px; }
+  .ly-otp { gap: 6px; }
+  .ly-otp-cell { height: 52px; font-size: 1.4rem; }
+  .ly-tx { grid-template-columns: 34px minmax(0, 1fr) auto; padding-inline: 16px; gap: 12px; }
+  .ly-panel-head, .ly-faq-item summary { padding-inline: 16px; }
+  .ly-faq-item p, .ly-empty { padding-inline: 16px; }
+}
